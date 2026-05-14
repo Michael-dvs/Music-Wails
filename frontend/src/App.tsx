@@ -65,7 +65,8 @@ function App() {
   const [currentSong, setCurrentSong] = useState<AnyTrack | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [bgColor, setBgColor] = useState('rgb(17, 24, 39)');
+  // bgColor is ONLY applied on the Lyrics page — rest of app stays flat black
+  const [lyricsBgColor, setLyricsBgColor] = useState('rgb(12, 12, 12)');
   const [isHighQuality, setIsHighQuality] = useState(false);
   const [streamLoading, setStreamLoading] = useState(false);
   const [audioDuration, setAudioDuration] = useState(0);
@@ -93,12 +94,13 @@ function App() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const rafRef = useRef<number | null>(null);
   const currentSongRef = useRef<AnyTrack | null>(null);
-  const isGeneratingRef = useRef(false); // prevents concurrent builds
+  const isGeneratingRef = useRef(false);
+  const queuePanelRef = useRef<HTMLDivElement | null>(null); // for click-outside detection
 
   useEffect(() => { currentSongRef.current = currentSong; }, [currentSong]);
   useEffect(() => { isGeneratingRef.current = isGeneratingQueue; }, [isGeneratingQueue]);
 
-  // ── Dynamic background via ColorThief ──
+  // ── ColorThief — ONLY extract color for Lyrics page background ──
   useEffect(() => {
     const art = currentSong?.coverArt;
     if (!art) return;
@@ -110,11 +112,87 @@ function App() {
         const CT = (window as any).ColorThief;
         if (CT) {
           const [r, g, b] = new CT().getColor(img);
-          setBgColor(`rgb(${r},${g},${b})`);
+          setLyricsBgColor(`rgb(${r},${g},${b})`);
         }
       } catch (_) {}
     };
   }, [currentSong]);
+
+  // ── Disable Inspect Element and Context Menu ──
+  useEffect(() => {
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+    };
+
+    const handleKeyDownInspect = (e: KeyboardEvent) => {
+      // F12
+      if (e.key === 'F12') {
+        e.preventDefault();
+      }
+      // Ctrl+Shift+I, J, C and Ctrl+U
+      if (e.ctrlKey && e.shiftKey && ['I', 'i', 'J', 'j', 'C', 'c'].includes(e.key)) {
+        e.preventDefault();
+      }
+      if (e.ctrlKey && ['U', 'u'].includes(e.key)) {
+        e.preventDefault();
+      }
+    };
+
+    document.addEventListener('contextmenu', handleContextMenu);
+    document.addEventListener('keydown', handleKeyDownInspect);
+
+    return () => {
+      document.removeEventListener('contextmenu', handleContextMenu);
+      document.removeEventListener('keydown', handleKeyDownInspect);
+    };
+  }, []);
+
+  // ── Keyboard shortcuts (Esc closes Lyrics; cleanup prevents leaks) ──
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) {
+        return;
+      }
+
+      if (e.key === 'Escape' && showLyrics) {
+        setShowLyrics(false);
+      } else if (e.code === 'Space' || e.key === ' ') {
+        e.preventDefault();
+        e.stopPropagation();
+
+        // Blur the active element to prevent UI buttons from getting visual focus/double-clicking
+        if (document.activeElement instanceof HTMLElement) {
+          document.activeElement.blur();
+        }
+
+        if (!audioRef.current || !currentSongRef.current || streamLoading) return;
+        
+        if (isPlaying) {
+          audioRef.current.pause();
+        } else {
+          audioRef.current.play();
+        }
+        setIsPlaying(!isPlaying);
+      }
+    };
+    // Use capture phase to intercept the spacebar before it triggers button clicks
+    window.addEventListener('keydown', onKeyDown, { capture: true });
+    return () => window.removeEventListener('keydown', onKeyDown, { capture: true });
+  }, [showLyrics, isPlaying, streamLoading]);
+
+  // ── Click-outside closes QueuePanel ──
+  useEffect(() => {
+    if (!showQueue) return;
+    const onPointerDown = (e: PointerEvent) => {
+      if (queuePanelRef.current && !queuePanelRef.current.contains(e.target as Node)) {
+        setShowQueue(false);
+      }
+    };
+    // Use 'capture' so it fires before panel's own events
+    document.addEventListener('pointerdown', onPointerDown, true);
+    return () => document.removeEventListener('pointerdown', onPointerDown, true);
+  }, [showQueue]);
 
   // ── requestAnimationFrame timing (60 FPS) ──
   useEffect(() => {
@@ -394,14 +472,19 @@ function App() {
     playSong(song as AnyTrack, []);
   }, [playSong]);
 
+  // ── setActiveTab wrapper — always closes lyrics panel ──
+  const handleSetActiveTab = useCallback((tab: string) => {
+    setActiveTab(tab);
+    setShowLyrics(false); // Sidebar nav always exits lyrics
+  }, []);
+
   return (
     <div
-      className="h-screen w-screen overflow-hidden flex transition-colors duration-1000 ease-in-out relative"
-      style={{ backgroundColor: bgColor }}
+      className="h-screen w-screen overflow-hidden flex relative bg-[var(--app-bg)] text-[var(--app-text)] transition-colors duration-300"
     >
-      <div className="absolute inset-0 bg-black/60 z-0 pointer-events-none" />
+      {/* Static flat base — dynamic color is applied via CSS variables */}
 
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+      <Sidebar activeTab={activeTab} setActiveTab={handleSetActiveTab} />
 
       {/* Main content area — relative so QueuePanel can overlay */}
       <div className="flex-1 relative h-full overflow-hidden">
@@ -414,7 +497,7 @@ function App() {
               <Search key="search" onPlaySong={handlePlaySong} />
             )}
             {(activeTab === 'library' || activeTab === 'playlists') && !showLyrics && (
-              <div key="placeholder" className="w-full h-full flex items-center justify-center text-gray-400">
+              <div key="placeholder" className="w-full h-full flex items-center justify-center text-gray-600 dark:text-gray-400">
                 <h2 className="text-2xl font-semibold capitalize">{activeTab} — Coming Soon</h2>
               </div>
             )}
@@ -428,20 +511,23 @@ function App() {
                 isRetrying={isLyricsRetrying}
                 audioDuration={audioDuration}
                 lrcDuration={lrcDuration}
+                bgColor={lyricsBgColor}
               />
             )}
           </AnimatePresence>
         </main>
 
-        {/* Queue Panel — overlays from the right */}
-        <QueuePanel
-          isOpen={showQueue}
-          onClose={() => setShowQueue(false)}
-          queue={queue as main.SmartTrack[]}
-          currentSong={currentSong as main.SmartTrack}
-          onPlayTrack={(track) => playSongCore(track, queueRef.current)}
-          isSmartShuffleActive={isSmartShuffleActive}
-        />
+        {/* Queue Panel — ref for click-outside detection */}
+        <div ref={queuePanelRef}>
+          <QueuePanel
+            isOpen={showQueue}
+            onClose={() => setShowQueue(false)}
+            queue={queue as main.SmartTrack[]}
+            currentSong={currentSong as main.SmartTrack}
+            onPlayTrack={(track) => playSongCore(track, queueRef.current)}
+            isSmartShuffleActive={isSmartShuffleActive}
+          />
+        </div>
       </div>
 
       <PlayerBar

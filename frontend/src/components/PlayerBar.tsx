@@ -82,7 +82,7 @@ export default function PlayerBar({
           <motion.div 
             initial={{ opacity: 0, y: 5 }}
             animate={{ opacity: 1, y: 0 }}
-            className="flex items-center space-x-2 bg-black/60 text-brand-300 text-xs px-3 py-1 rounded-full border border-white/10 backdrop-blur-md"
+            className="flex items-center space-x-2 bg-white/60 dark:bg-black/60 text-brand-300 text-xs px-3 py-1 rounded-full border border-black/10 dark:border-white/10 backdrop-blur-md"
           >
             <Loader2 className="w-3 h-3 animate-spin" />
             <span>Fetching full stream...</span>
@@ -92,7 +92,7 @@ export default function PlayerBar({
             initial={{ opacity: 0, y: 5 }}
             animate={{ opacity: 1, y: 0 }}
             className={`flex items-center space-x-2 text-xs px-3 py-1 rounded-full border backdrop-blur-md transition-colors ${
-              isHighQuality ? 'bg-red-500/20 text-red-400 border-red-500/30' : 'bg-black/60 text-gray-400 border-white/10'
+              isHighQuality ? 'bg-red-500/20 text-red-400 border-red-500/30' : 'bg-white/60 dark:bg-black/60 text-gray-600 dark:text-gray-400 border-black/10 dark:border-white/10'
             }`}
           >
             {isHighQuality ? (
@@ -118,13 +118,13 @@ export default function PlayerBar({
               <img src={currentSong.coverArt} alt="cover" className={`w-full h-full object-cover transition-opacity duration-300 ${streamLoading ? 'opacity-50' : 'opacity-100'}`} />
               {streamLoading && (
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <Loader2 className="w-6 h-6 text-white animate-spin" />
+                  <Loader2 className="w-6 h-6 text-black dark:text-white animate-spin" />
                 </div>
               )}
             </div>
             <div className="min-w-0">
               <div className="flex items-center space-x-2">
-                <h4 className="text-white font-semibold line-clamp-1 text-sm">{currentSong.title}</h4>
+                <h4 className="text-black dark:text-white font-semibold line-clamp-1 text-sm">{currentSong.title}</h4>
                 {/* Smart/Recommended Badge */}
                 <AnimatePresence>
                   {(currentSong as any).source === 'lastfm' && (
@@ -140,15 +140,15 @@ export default function PlayerBar({
                   )}
                 </AnimatePresence>
               </div>
-              <p className="text-gray-400 text-xs line-clamp-1">{currentSong.artist}</p>
+              <p className="text-gray-600 dark:text-gray-400 text-xs line-clamp-1">{currentSong.artist}</p>
             </div>
           </>
         ) : (
           <div className="flex items-center space-x-4 opacity-50">
-            <div className="w-14 h-14 bg-white/10 rounded-lg"></div>
+            <div className="w-14 h-14 bg-black/10 dark:bg-white/10 rounded-lg"></div>
             <div>
-              <div className="h-4 w-24 bg-white/10 rounded mb-2"></div>
-              <div className="h-3 w-16 bg-white/10 rounded"></div>
+              <div className="h-4 w-24 bg-black/10 dark:bg-white/10 rounded mb-2"></div>
+              <div className="h-3 w-16 bg-black/10 dark:bg-white/10 rounded"></div>
             </div>
           </div>
         )}
@@ -159,39 +159,39 @@ export default function PlayerBar({
         <div className="flex items-center space-x-6">
           <button 
             onClick={() => setIsShuffle(!isShuffle)}
-            className={`transition-colors hover:scale-110 active:scale-95 ${isShuffle ? 'text-brand-400' : 'text-gray-400 hover:text-white'}`}
+            className={`transition-colors hover:scale-110 active:scale-95 ${isShuffle ? 'text-brand-400' : 'text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white'}`}
           >
             <Shuffle className="w-4 h-4" />
           </button>
-          <button onClick={onPrev} className="text-gray-400 hover:text-white transition-colors hover:scale-110 active:scale-95">
+          <button onClick={onPrev} className="text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white transition-colors hover:scale-110 active:scale-95">
             <SkipBack className="w-5 h-5 fill-current" />
           </button>
           <button 
             onClick={togglePlay}
             disabled={streamLoading || !currentSong}
-            className={`w-10 h-10 bg-white rounded-full flex items-center justify-center hover:scale-110 active:scale-95 transition-all shadow-lg shadow-white/10 ${
+            className={`w-10 h-10 bg-white rounded-full flex items-center justify-center hover:scale-110 active:scale-95 transition-all shadow-lg shadow-black/10 dark:shadow-white/10 ${
               (streamLoading || !currentSong) ? 'opacity-50 cursor-not-allowed scale-100' : ''
             }`}
           >
             {streamLoading ? (
-               <Loader2 className="w-5 h-5 text-black animate-spin" />
+               <Loader2 className="w-5 h-5 text-white dark:text-black animate-spin" />
             ) : isPlaying ? (
-              <Pause className="w-5 h-5 text-black fill-black" />
+              <Pause className="w-5 h-5 text-white dark:text-black fill-white dark:fill-black" />
             ) : (
-              <Play className="w-5 h-5 text-black fill-black ml-1" />
+              <Play className="w-5 h-5 text-white dark:text-black fill-white dark:fill-black ml-1" />
             )}
           </button>
-          <button onClick={onNext} className="text-gray-400 hover:text-white transition-colors hover:scale-110 active:scale-95">
+          <button onClick={onNext} className="text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white transition-colors hover:scale-110 active:scale-95">
             <SkipForward className="w-5 h-5 fill-current" />
           </button>
-          <button className="text-gray-400 hover:text-white transition-colors hover:scale-110 active:scale-95">
+          <button className="text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white transition-colors hover:scale-110 active:scale-95">
             <Repeat className="w-4 h-4" />
           </button>
         </div>
         
         {/* Progress Bar */}
         <div className="flex items-center space-x-3 w-full max-w-md">
-          <span className="text-xs text-gray-400 w-8 text-right font-medium tabular-nums">
+          <span className="text-xs text-gray-600 dark:text-gray-400 w-8 text-right font-medium tabular-nums">
             {audioRef.current ? formatTime(audioRef.current.currentTime) : '0:00'}
           </span>
           <input 
@@ -201,9 +201,9 @@ export default function PlayerBar({
             value={progress}
             onChange={handleProgressChange}
             disabled={streamLoading || !currentSong}
-            className="w-full h-1 bg-white/20 rounded-lg appearance-none cursor-pointer accent-brand-500 disabled:opacity-50" 
+            className="w-full h-1 bg-black/20 dark:bg-white/20 rounded-lg appearance-none cursor-pointer accent-brand-500 disabled:opacity-50" 
           />
-          <span className="text-xs text-gray-400 w-8 font-medium tabular-nums">
+          <span className="text-xs text-gray-600 dark:text-gray-400 w-8 font-medium tabular-nums">
             {durationStr()}
           </span>
         </div>
@@ -229,7 +229,7 @@ export default function PlayerBar({
         {/* Lyrics Button */}
         <button 
           onClick={() => setShowLyrics(!showLyrics)}
-          className={`transition-all hover:scale-110 active:scale-95 ${showLyrics ? 'text-brand-400' : 'text-gray-400 hover:text-white'}`}
+          className={`transition-all hover:scale-110 active:scale-95 ${showLyrics ? 'text-brand-400' : 'text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white'}`}
         >
           <Mic2 className="w-5 h-5" />
         </button>
@@ -238,18 +238,18 @@ export default function PlayerBar({
         <div className="relative">
           <button 
             onClick={() => setShowQueue(!showQueue)}
-            className={`transition-all hover:scale-110 active:scale-95 ${showQueue ? 'text-brand-400' : 'text-gray-400 hover:text-white'}`}
+            className={`transition-all hover:scale-110 active:scale-95 ${showQueue ? 'text-brand-400' : 'text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white'}`}
           >
             <ListMusic className="w-5 h-5" />
           </button>
           {queueLength > 0 && (
-            <span className="absolute -top-1.5 -right-1.5 bg-brand-500 text-white text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-bold">
+            <span className="absolute -top-1.5 -right-1.5 bg-brand-500 text-black dark:text-white text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-bold">
               {queueLength > 9 ? '9+' : queueLength}
             </span>
           )}
         </div>
 
-        <Volume2 className="w-5 h-5 text-gray-400" />
+        <Volume2 className="w-5 h-5 text-gray-600 dark:text-gray-400" />
         <input 
           type="range" 
           min="0" 
@@ -258,7 +258,7 @@ export default function PlayerBar({
           onChange={(e) => {
             if (audioRef.current) audioRef.current.volume = parseFloat(e.target.value) / 100;
           }}
-          className="w-24 h-1 bg-white/20 rounded-lg appearance-none cursor-pointer accent-white" 
+          className="w-24 h-1 bg-black/20 dark:bg-white/20 rounded-lg appearance-none cursor-pointer accent-white" 
         />
       </div>
     </div>

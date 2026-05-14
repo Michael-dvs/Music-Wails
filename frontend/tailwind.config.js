@@ -8,19 +8,21 @@ export default {
     extend: {
       colors: {
         'brand': {
-          '50': '#f5f3ff',
-          '100': '#ede9fe',
-          '200': '#ddd6fe',
-          '300': '#c4b5fd',
-          '400': '#a78bfa',
-          '500': '#8b5cf6',
-          '600': '#7c3aed',
-          '700': '#6d28d9',
-          '800': '#5b21b6',
-          '900': '#4c1d95',
-          '950': '#2e1065',
+          '50':  '#fff1f3',
+          '100': '#ffe0e4',
+          '200': '#ffc6cd',
+          '300': '#ff9aa5',
+          '400': '#ff5f6f',
+          '500': '#FA243C', /* Apple Music Red — primary accent */
+          '600': '#e0102a',
+          '700': '#bc0a22',
+          '800': '#9b0d1f',
+          '900': '#810f20',
+          '950': '#47020d',
         },
-        'cyan-accent': '#06b6d4',
+        'apple-black': '#0c0c0c',
+        'apple-surface': '#1c1c1e',  /* iOS grouped bg */
+        'apple-divider': '#2c2c2e',  /* iOS separator */
       },
       fontFamily: {
         sans: ['Inter', 'ui-sans-serif', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif'],

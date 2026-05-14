@@ -110,7 +110,7 @@ export default function Search({ onPlaySong }: { onPlaySong: (song: main.Song, q
       {/* Search Bar with Animated Placeholder */}
       <div className="relative max-w-2xl w-full">
         <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-10">
-          <SearchIcon className="text-gray-400 w-6 h-6" />
+          <SearchIcon className="text-gray-600 dark:text-gray-400 w-6 h-6" />
         </div>
         
         {/* Animated Placeholder Overlay */}
@@ -124,7 +124,7 @@ export default function Search({ onPlaySong }: { onPlaySong: (song: main.Song, q
                   animate={{ opacity: 0.5, y: 0 }}
                   exit={{ opacity: 0, y: -8 }}
                   transition={{ duration: 0.3 }}
-                  className="text-gray-400 text-base"
+                  className="text-gray-600 dark:text-gray-400 text-base"
                 >
                   {ANIMATED_PLACEHOLDERS[placeholderIdx]}
                 </motion.span>
@@ -140,7 +140,7 @@ export default function Search({ onPlaySong }: { onPlaySong: (song: main.Song, q
           onChange={(e) => setQuery(e.target.value)}
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
-          className="w-full bg-white/10 border border-white/20 rounded-full py-4 pl-12 pr-12 text-white focus:outline-none focus:ring-2 focus:ring-brand-500/50 backdrop-blur-md shadow-lg transition-all"
+          className="w-full bg-black/10 dark:bg-white/10 border border-black/20 dark:border-white/20 rounded-full py-4 pl-12 pr-12 text-black dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500/50 backdrop-blur-md shadow-lg transition-all"
         />
         
         {/* Clear / Loading indicator */}
@@ -148,7 +148,7 @@ export default function Search({ onPlaySong }: { onPlaySong: (song: main.Song, q
           {query.length > 0 && !loading && (
             <button 
               onClick={() => { setQuery(''); setResults([]); }}
-              className="p-1 rounded-full hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
+              className="p-1 rounded-full hover:bg-black/10 dark:hover:bg-white/10 text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white transition-colors"
             >
               <X className="w-4 h-4" />
             </button>
@@ -177,16 +177,16 @@ export default function Search({ onPlaySong }: { onPlaySong: (song: main.Song, q
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.8 }}
                 transition={{ duration: 0.2 }}
-                className="group flex items-center space-x-1.5 bg-white/8 hover:bg-white/15 backdrop-blur-md border border-white/10 hover:border-white/20 rounded-full px-3 py-1.5 cursor-pointer transition-all duration-200"
+                className="group flex items-center space-x-1.5 bg-black/8 dark:bg-white/8 hover:bg-black/15 dark:hover:bg-white/15 backdrop-blur-md border border-black/10 dark:border-white/10 hover:border-black/20 dark:border-white/20 rounded-full px-3 py-1.5 cursor-pointer transition-all duration-200"
                 onClick={() => handleHistoryClick(term)}
               >
-                <span className="text-sm text-gray-300 group-hover:text-white transition-colors">{term}</span>
+                <span className="text-sm text-gray-700 dark:text-gray-300 group-hover:text-black dark:hover:text-white transition-colors">{term}</span>
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
                     handleHistoryRemove(term);
                   }}
-                  className="p-0.5 rounded-full opacity-0 group-hover:opacity-100 hover:bg-white/10 text-gray-400 hover:text-white transition-all"
+                  className="p-0.5 rounded-full opacity-0 group-hover:opacity-100 hover:bg-black/10 dark:hover:bg-white/10 text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white transition-all"
                 >
                   <X className="w-3 h-3" />
                 </button>
@@ -200,7 +200,7 @@ export default function Search({ onPlaySong }: { onPlaySong: (song: main.Song, q
       <div className="flex-1">
         {results.length > 0 ? (
           <div>
-            <h2 className="text-xl font-bold text-white mb-6 flex items-center space-x-2">
+            <h2 className="text-xl font-bold text-black dark:text-white mb-6 flex items-center space-x-2">
               <Sparkles className="w-5 h-5 text-brand-400" />
               <span>Top Results</span>
               <span className="text-sm font-normal text-gray-500 ml-2">({results.length})</span>
@@ -213,21 +213,21 @@ export default function Search({ onPlaySong }: { onPlaySong: (song: main.Song, q
                   transition={{ delay: idx * 0.04, duration: 0.3 }}
                   key={song.id}
                   onClick={() => onPlaySong(song, results)}
-                  className="group flex items-center space-x-4 bg-white/5 hover:bg-white/10 border border-transparent hover:border-white/10 p-3 rounded-xl cursor-pointer transition-all duration-300"
+                  className="group flex items-center space-x-4 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 border border-transparent hover:border-black/10 dark:border-white/10 p-3 rounded-xl cursor-pointer transition-all duration-300"
                 >
                   <div className="relative w-16 h-16 flex-shrink-0">
                     <img src={song.coverArt} alt={song.title} className="w-full h-full object-cover rounded-lg shadow-md" />
-                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-lg">
-                      <Play className="text-white w-6 h-6 fill-white" />
+                    <div className="absolute inset-0 bg-white/40 dark:bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-lg">
+                      <Play className="text-black dark:text-white w-6 h-6 fill-black dark:fill-white" />
                     </div>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h4 className="text-white font-semibold truncate group-hover:text-brand-400 transition-colors">{song.title}</h4>
-                    <p className="text-gray-400 text-sm truncate">{song.artist}</p>
+                    <h4 className="text-black dark:text-white font-semibold truncate group-hover:text-brand-400 transition-colors">{song.title}</h4>
+                    <p className="text-gray-600 dark:text-gray-400 text-sm truncate">{song.artist}</p>
                     <div className="flex items-center space-x-2 mt-0.5">
                       <p className="text-gray-500 text-xs truncate">{song.album}</p>
                       {song.genre && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-gray-500 border border-white/5">{song.genre}</span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-black/5 dark:bg-white/5 text-gray-500 border border-black/5 dark:border-white/5">{song.genre}</span>
                       )}
                     </div>
                   </div>
@@ -240,7 +240,7 @@ export default function Search({ onPlaySong }: { onPlaySong: (song: main.Song, q
             <motion.div 
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="flex flex-col items-center justify-center h-64 text-gray-400"
+              className="flex flex-col items-center justify-center h-64 text-gray-600 dark:text-gray-400"
             >
               <SearchIcon className="w-12 h-12 mb-4 opacity-50" />
               <p>No results found for "{query}"</p>

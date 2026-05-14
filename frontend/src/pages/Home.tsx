@@ -115,7 +115,7 @@ export default function Home({ onPlaySong }: { onPlaySong: (song: main.Song, que
                 transition={{ delay: 0.2 }}
                 src={heroSong.coverArt} 
                 alt="" 
-                className="w-48 h-48 rounded-2xl shadow-2xl shadow-black/60 border border-white/10 object-cover"
+                className="w-48 h-48 rounded-2xl shadow-2xl shadow-black/60 border border-black/10 dark:border-white/10 object-cover"
               />
               <motion.div 
                 initial={{ opacity: 0, y: 20 }}
@@ -127,19 +127,19 @@ export default function Home({ onPlaySong }: { onPlaySong: (song: main.Song, que
                   <Sparkles className="w-4 h-4 text-brand-400" />
                   <span className="text-xs font-semibold uppercase tracking-widest text-brand-300">Daily Mix</span>
                 </div>
-                <h1 className="text-4xl md:text-5xl font-bold text-white tracking-tight leading-tight text-balance">
+                <h1 className="text-4xl md:text-5xl font-bold text-black dark:text-white tracking-tight leading-tight text-balance">
                   {heroCategory.name}
                 </h1>
-                <p className="text-white/60 text-sm">{heroSongs.length} tracks • {heroCategory.subtitle}</p>
+                <p className="text-black/60 dark:text-white/60 text-sm">{heroSongs.length} tracks • {heroCategory.subtitle}</p>
                 <div className="flex items-center space-x-3 mt-2">
                   <button 
                     onClick={(e) => {
                       e.stopPropagation();
                       onPlaySong(heroSong, heroSongs);
                     }}
-                    className="flex items-center space-x-2 bg-brand-500 hover:bg-brand-600 text-white px-6 py-2.5 rounded-full font-semibold shadow-lg shadow-brand-500/30 hover:shadow-brand-500/50 transition-all hover:scale-105 active:scale-95"
+                    className="flex items-center space-x-2 bg-brand-500 hover:bg-brand-600 text-black dark:text-white px-6 py-2.5 rounded-full font-semibold shadow-lg shadow-brand-500/30 hover:shadow-brand-500/50 transition-all hover:scale-105 active:scale-95"
                   >
-                    <Play className="w-5 h-5 fill-white" />
+                    <Play className="w-5 h-5 fill-black dark:fill-white" />
                     <span>Play</span>
                   </button>
                   <button 
@@ -147,7 +147,7 @@ export default function Home({ onPlaySong }: { onPlaySong: (song: main.Song, que
                       e.stopPropagation();
                       handlePlaylistClick(heroCategory.id);
                     }}
-                    className="text-white/60 hover:text-white text-sm underline underline-offset-4 decoration-white/20 hover:decoration-white/50 transition-all"
+                    className="text-black/60 dark:text-white/60 hover:text-black dark:hover:text-white text-sm underline underline-offset-4 decoration-white/20 hover:decoration-white/50 transition-all"
                   >
                     View All
                   </button>
@@ -175,17 +175,17 @@ export default function Home({ onPlaySong }: { onPlaySong: (song: main.Song, que
               {/* Section Header */}
               <div className="flex items-center justify-between mb-5">
                 <div className="flex items-center space-x-3">
-                  <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${cat.gradient} flex items-center justify-center text-white shadow-lg`}>
+                  <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${cat.gradient} flex items-center justify-center text-black dark:text-white shadow-lg`}>
                     {cat.icon}
                   </div>
                   <div>
-                    <h2 className="text-xl font-bold text-white">{cat.name}</h2>
+                    <h2 className="text-xl font-bold text-black dark:text-white">{cat.name}</h2>
                     <p className="text-xs text-gray-500">{cat.subtitle}</p>
                   </div>
                 </div>
                 <button 
                   onClick={() => handlePlaylistClick(cat.id)}
-                  className="flex items-center space-x-1 text-sm text-gray-400 hover:text-white transition-colors group"
+                  className="flex items-center space-x-1 text-sm text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white transition-colors group"
                 >
                   <span>See all</span>
                   <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
@@ -260,7 +260,7 @@ function SongCard({ song, idx, large, accentColor, onPlay }: {
     >
       {/* Card with gradient bg */}
       <div 
-        className={`relative ${large ? 'h-56' : 'h-44'} rounded-2xl overflow-hidden shadow-lg border border-white/5 transition-all duration-300 group-hover:shadow-xl group-hover:border-white/15 group-hover:scale-[1.03]`}
+        className={`relative ${large ? 'h-56' : 'h-44'} rounded-2xl overflow-hidden shadow-lg border border-black/5 dark:border-white/5 transition-all duration-300 group-hover:shadow-xl group-hover:border-black/15 dark:border-white/15 group-hover:scale-[1.03]`}
         style={{ 
           background: `linear-gradient(145deg, ${dominantColor}33 0%, ${dominantColor}11 50%, transparent 100%)`
         }}
@@ -272,9 +272,9 @@ function SongCard({ song, idx, large, accentColor, onPlay }: {
           className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
         />
         {/* Hover overlay with play button */}
-        <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+        <div className="absolute inset-0 bg-white/40 dark:bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
           <div className="w-12 h-12 bg-brand-500 rounded-full flex items-center justify-center transform translate-y-4 group-hover:translate-y-0 transition-all duration-300 shadow-xl shadow-brand-500/30">
-            <Play className="text-white w-6 h-6 fill-white ml-0.5" />
+            <Play className="text-black dark:text-white w-6 h-6 fill-black dark:fill-white ml-0.5" />
           </div>
         </div>
         {/* Bottom gradient for text readability */}
@@ -283,7 +283,7 @@ function SongCard({ song, idx, large, accentColor, onPlay }: {
 
       {/* Song Info */}
       <div className="mt-3 px-1">
-        <h3 className="text-white font-semibold text-sm line-clamp-1 group-hover:text-brand-400 transition-colors">{song.title}</h3>
+        <h3 className="text-black dark:text-white font-semibold text-sm line-clamp-1 group-hover:text-brand-400 transition-colors">{song.title}</h3>
         <p className="text-gray-500 text-xs line-clamp-1 mt-0.5">{song.artist}</p>
       </div>
     </motion.div>

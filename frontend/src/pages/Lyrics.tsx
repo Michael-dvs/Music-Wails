@@ -9,12 +9,13 @@ interface LyricsProps {
   currentTime: number;
   lyrics: LyricLine[];
   loading: boolean;
-  isRetrying: boolean;     // exponential backoff in progress
+  isRetrying: boolean;
   audioDuration: number;
   lrcDuration: number;
+  bgColor: string; // dominant color from album art (Apple Music style)
 }
 
-export default function Lyrics({ currentSong, currentTime, lyrics, loading, isRetrying, audioDuration, lrcDuration }: LyricsProps) {
+export default function Lyrics({ currentSong, currentTime, lyrics, loading, isRetrying, audioDuration, lrcDuration, bgColor }: LyricsProps) {
   const [activeLine, setActiveLine] = useState<number>(-1);
   const scrollRef = useRef<HTMLDivElement>(null);
   const lineRefs = useRef<(HTMLParagraphElement | null)[]>([]);
@@ -115,18 +116,23 @@ export default function Lyrics({ currentSong, currentTime, lyrics, loading, isRe
   }, [currentTime, lyrics, activeLine, offset, autoScroll]);
 
   return (
-    <div className="absolute inset-0 z-50 overflow-hidden bg-black/40 backdrop-blur-3xl transition-all duration-1000 flex">
-      {/* Background Cover Art for blur effect */}
+    <div
+      className="absolute inset-0 z-50 overflow-hidden flex transition-colors duration-700"
+      style={{ backgroundColor: bgColor }}
+    >
+      {/* Blurred album art overlay — ONLY here, not global app */}
       {currentSong && (
-        <motion.img 
+        <motion.img
           initial={{ opacity: 0 }}
-          animate={{ opacity: 0.3 }}
+          animate={{ opacity: 0.18 }}
           exit={{ opacity: 0 }}
-          src={currentSong.coverArt} 
-          alt="bg" 
-          className="absolute inset-0 w-full h-full object-cover blur-[100px] pointer-events-none"
+          src={currentSong.coverArt}
+          alt="bg"
+          className="absolute inset-0 w-full h-full object-cover blur-[80px] scale-110 pointer-events-none"
         />
       )}
+      {/* Dark vignette over art */}
+      <div className="absolute inset-0 bg-white/55 dark:bg-black/55 pointer-events-none" />
 
       {/* Duration Mismatch Warning */}
       <AnimatePresence>
@@ -141,7 +147,7 @@ export default function Lyrics({ currentSong, currentTime, lyrics, loading, isRe
             <span>Duration mismatch detected ({Math.abs(audioDuration - lrcDuration).toFixed(0)}s diff)</span>
             <button 
               onClick={() => setShowMismatchWarning(false)}
-              className="ml-2 p-0.5 rounded-full hover:bg-white/10 transition-colors"
+              className="ml-2 p-0.5 rounded-full hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
             >
               <X className="w-3 h-3" />
             </button>
@@ -158,11 +164,11 @@ export default function Lyrics({ currentSong, currentTime, lyrics, loading, isRe
           className="w-full md:w-1/2 flex flex-col items-center justify-center p-8 hidden md:flex"
         >
           {currentSong ? (
-            <div className="relative w-80 h-80 rounded-2xl overflow-hidden shadow-2xl shadow-black/50 border border-white/10">
+            <div className="relative w-80 h-80 rounded-2xl overflow-hidden shadow-2xl shadow-black/50 border border-black/10 dark:border-white/10">
               <img src={currentSong.coverArt} alt="cover" className="w-full h-full object-cover" />
             </div>
           ) : (
-            <div className="w-80 h-80 rounded-2xl bg-white/5 animate-pulse" />
+            <div className="w-80 h-80 rounded-2xl bg-black/5 dark:bg-white/5 animate-pulse" />
           )}
         </motion.div>
 
@@ -173,9 +179,9 @@ export default function Lyrics({ currentSong, currentTime, lyrics, loading, isRe
         >
           {loading ? (
             <div className="flex flex-col space-y-8 w-full opacity-50 justify-center h-full">
-              <div className="h-12 md:h-16 bg-white/20 rounded-xl w-3/4 animate-shimmer"></div>
-              <div className="h-12 md:h-16 bg-white/20 rounded-xl w-full animate-shimmer"></div>
-              <div className="h-12 md:h-16 bg-white/20 rounded-xl w-2/3 animate-shimmer"></div>
+              <div className="h-12 md:h-16 bg-black/20 dark:bg-white/20 rounded-xl w-3/4 animate-shimmer"></div>
+              <div className="h-12 md:h-16 bg-black/20 dark:bg-white/20 rounded-xl w-full animate-shimmer"></div>
+              <div className="h-12 md:h-16 bg-black/20 dark:bg-white/20 rounded-xl w-2/3 animate-shimmer"></div>
             </div>
           ) : lyrics.length > 0 ? (
             lyrics.map((line, idx) => (
@@ -189,8 +195,8 @@ export default function Lyrics({ currentSong, currentTime, lyrics, loading, isRe
                   filter: activeLine === idx ? 'blur(0px)' : 'blur(0.5px)'
                 }}
                 transition={{ duration: 0.4, ease: "easeOut" }}
-                className={`text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight transform origin-left transition-colors duration-500 cursor-pointer hover:text-white ${
-                  activeLine === idx ? 'text-white' : 'text-white/40'
+                className={`text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight transform origin-left transition-colors duration-500 cursor-pointer hover:text-black dark:hover:text-white ${
+                  activeLine === idx ? 'text-black dark:text-white' : 'text-black/40 dark:text-white/40'
                 }`}
               >
                 {line.text || '\u266a'}
@@ -201,10 +207,10 @@ export default function Lyrics({ currentSong, currentTime, lyrics, loading, isRe
             <div className="flex flex-col items-center justify-center h-full pb-32 space-y-8">
               {/* Shimmer placeholder lines */}
               <div className="w-full space-y-7 opacity-40">
-                <div className="h-10 md:h-14 bg-white/20 rounded-xl w-3/4 animate-shimmer" />
-                <div className="h-10 md:h-14 bg-white/20 rounded-xl w-full animate-shimmer" />
-                <div className="h-10 md:h-14 bg-white/20 rounded-xl w-2/3 animate-shimmer" />
-                <div className="h-10 md:h-14 bg-white/20 rounded-xl w-4/5 animate-shimmer" />
+                <div className="h-10 md:h-14 bg-black/20 dark:bg-white/20 rounded-xl w-3/4 animate-shimmer" />
+                <div className="h-10 md:h-14 bg-black/20 dark:bg-white/20 rounded-xl w-full animate-shimmer" />
+                <div className="h-10 md:h-14 bg-black/20 dark:bg-white/20 rounded-xl w-2/3 animate-shimmer" />
+                <div className="h-10 md:h-14 bg-black/20 dark:bg-white/20 rounded-xl w-4/5 animate-shimmer" />
               </div>
               {/* Searching indicator */}
               <motion.div
@@ -218,11 +224,11 @@ export default function Lyrics({ currentSong, currentTime, lyrics, loading, isRe
                 >
                   <SearchCheck className="w-5 h-5 text-brand-400" />
                 </motion.div>
-                <span className="text-sm text-white/50 font-medium tracking-wide">Mencari lirik...</span>
+                <span className="text-sm text-black/50 dark:text-white/50 font-medium tracking-wide">Mencari lirik...</span>
                 <motion.span
                   animate={{ opacity: [0.2, 1, 0.2] }}
                   transition={{ repeat: Infinity, duration: 1.5 }}
-                  className="text-sm text-white/30"
+                  className="text-sm text-black/30 dark:text-white/30"
                 >
                   ✦
                 </motion.span>
@@ -230,7 +236,7 @@ export default function Lyrics({ currentSong, currentTime, lyrics, loading, isRe
             </div>
           ) : (
             <div className="flex items-center justify-center h-full pb-32">
-              <p className="text-3xl text-white/40 font-semibold text-center">No lyrics found for this song.</p>
+              <p className="text-3xl text-black/40 dark:text-white/40 font-semibold text-center">No lyrics found for this song.</p>
             </div>
           )}
         </div>
@@ -241,7 +247,7 @@ export default function Lyrics({ currentSong, currentTime, lyrics, loading, isRe
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="absolute bottom-32 right-12 z-50 flex items-center space-x-4 bg-black/30 hover:bg-black/50 backdrop-blur-md px-5 py-3 rounded-2xl border border-white/5 transition-all duration-300 opacity-40 hover:opacity-100 group"
+          className="absolute bottom-32 right-12 z-50 flex items-center space-x-4 bg-white/30 dark:bg-black/30 hover:bg-white/50 dark:hover:bg-black/50 backdrop-blur-md px-5 py-3 rounded-2xl border border-black/5 dark:border-white/5 transition-all duration-300 opacity-40 hover:opacity-100 group"
         >
           {/* Auto-Scroll Toggle */}
           <button
@@ -249,7 +255,7 @@ export default function Lyrics({ currentSong, currentTime, lyrics, loading, isRe
             className={`flex items-center space-x-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-300 ${
               autoScroll 
                 ? 'bg-brand-500/20 text-brand-300 border border-brand-500/30' 
-                : 'bg-white/5 text-white/50 border border-white/10 hover:text-white'
+                : 'bg-black/5 dark:bg-white/5 text-black/50 dark:text-white/50 border border-black/10 dark:border-white/10 hover:text-black dark:hover:text-white'
             }`}
             title={autoScroll ? 'Auto-Scroll ON — Click to enable Freedom Mode' : 'Freedom Mode ON — Manual scroll active'}
           >
@@ -258,12 +264,12 @@ export default function Lyrics({ currentSong, currentTime, lyrics, loading, isRe
           </button>
 
           {/* Divider */}
-          <div className="w-px h-6 bg-white/10" />
+          <div className="w-px h-6 bg-black/10 dark:bg-white/10" />
 
           {/* Offset Slider */}
           <div className="flex items-center space-x-3">
-            <Settings2 className="w-4 h-4 text-white/50 group-hover:text-white transition-colors" />
-            <span className="text-xs font-mono font-medium text-white/70 w-12 text-center">
+            <Settings2 className="w-4 h-4 text-black/50 dark:text-white/50 group-hover:text-black dark:hover:text-white transition-colors" />
+            <span className="text-xs font-mono font-medium text-black/70 dark:text-white/70 w-12 text-center">
               {offset > 0 ? '+' : ''}{offset.toFixed(1)}s
             </span>
             <input

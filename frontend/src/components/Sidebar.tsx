@@ -1,4 +1,5 @@
 import { Home, Search, Library, ListMusic } from 'lucide-react';
+import appIcon from '../assets/images/appicon.png';
 
 interface SidebarProps {
   activeTab: string;
@@ -17,8 +18,8 @@ export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
     <div className="w-60 h-full flex flex-col p-5 z-10 glass">
       {/* Logo */}
       <div className="flex items-center space-x-3 mb-8 px-1">
-        <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-brand-500 shadow-lg shadow-brand-500/30">
-          <ListMusic className="text-black dark:text-white w-4 h-4" />
+        <div className="w-8 h-8 rounded-lg flex items-center justify-center shadow-lg shadow-brand-500/30 overflow-hidden">
+          <img src={appIcon} alt="App Icon" className="w-full h-full object-cover" />
         </div>
         <h1 className="text-[15px] font-semibold tracking-tight text-black dark:text-white">Music-Wails</h1>
       </div>

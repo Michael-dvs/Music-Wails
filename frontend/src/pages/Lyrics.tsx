@@ -244,47 +244,54 @@ export default function Lyrics({ currentSong, currentTime, lyrics, loading, isRe
 
       {/* Bottom Controls - Offset + Auto-Scroll Toggle */}
       {lyrics.length > 0 && (
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="absolute bottom-32 right-12 z-50 flex items-center space-x-4 bg-white/30 dark:bg-black/30 hover:bg-white/50 dark:hover:bg-black/50 backdrop-blur-md px-5 py-3 rounded-2xl border border-black/5 dark:border-white/5 transition-all duration-300 opacity-40 hover:opacity-100 group"
+          className="absolute bottom-32 right-12 z-50 flex items-center justify-end group h-14"
         >
-          {/* Auto-Scroll Toggle */}
-          <button
-            onClick={toggleAutoScroll}
-            className={`flex items-center space-x-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-300 ${
-              autoScroll 
-                ? 'bg-brand-500/20 text-brand-300 border border-brand-500/30' 
-                : 'bg-black/5 dark:bg-white/5 text-black/50 dark:text-white/50 border border-black/10 dark:border-white/10 hover:text-black dark:hover:text-white'
-            }`}
-            title={autoScroll ? 'Auto-Scroll ON — Click to enable Freedom Mode' : 'Freedom Mode ON — Manual scroll active'}
-          >
-            {autoScroll ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3" />}
-            <span>{autoScroll ? 'Auto-Scroll' : 'Free Scroll'}</span>
-          </button>
+          {/* Subtle Icon Trigger (Visible when NOT hovered) */}
+          <div className="absolute right-0 flex items-center justify-center w-12 h-12 rounded-full bg-black/5 dark:bg-white/5 backdrop-blur-md border border-black/5 dark:border-white/5 opacity-40 group-hover:opacity-0 transition-opacity duration-300 pointer-events-none">
+            <Settings2 className="w-5 h-5 text-black dark:text-white" />
+          </div>
 
-          {/* Divider */}
-          <div className="w-px h-6 bg-black/10 dark:bg-white/10" />
+          {/* Expanded Controls Panel (Fades in and expands on hover) */}
+          <div className="flex items-center space-x-4 bg-white/30 dark:bg-black/30 hover:bg-white/50 dark:hover:bg-black/50 backdrop-blur-md px-5 py-3 rounded-2xl border border-black/10 dark:border-white/10 shadow-xl opacity-0 scale-95 origin-right group-hover:opacity-100 group-hover:scale-100 transition-all duration-500 ease-out pointer-events-none group-hover:pointer-events-auto">
+            {/* Auto-Scroll Toggle */}
+            <button
+              onClick={toggleAutoScroll}
+              className={`flex items-center space-x-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-300 ${
+                autoScroll
+                  ? 'bg-brand-500/20 text-brand-300 border border-brand-500/30'
+                  : 'bg-black/5 dark:bg-white/5 text-black/50 dark:text-white/50 border border-black/10 dark:border-white/10 hover:text-black dark:hover:text-white'
+              }`}
+              title={autoScroll ? 'Auto-Scroll ON — Click to enable Freedom Mode' : 'Freedom Mode ON — Manual scroll active'}
+            >
+              {autoScroll ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3" />}
+              <span>{autoScroll ? 'Auto-Scroll' : 'Free Scroll'}</span>
+            </button>
 
-          {/* Offset Slider */}
-          <div className="flex items-center space-x-3">
-            <Settings2 className="w-4 h-4 text-black/50 dark:text-white/50 group-hover:text-black dark:hover:text-white transition-colors" />
-            <span className="text-xs font-mono font-medium text-black/70 dark:text-white/70 w-12 text-center">
-              {offset > 0 ? '+' : ''}{offset.toFixed(1)}s
-            </span>
-            <input
-              type="range"
-              min="-5"
-              max="5"
-              step="0.1"
-              value={offset}
-              onChange={handleOffsetChange}
-              className="w-28 offset-slider"
-              title={`Lyrics offset: ${offset > 0 ? '+' : ''}${offset.toFixed(1)}s`}
-            />
+            {/* Divider */}
+            <div className="w-px h-6 bg-black/10 dark:bg-white/10" />
+
+            {/* Offset Slider */}
+            <div className="flex items-center space-x-3">
+              <Settings2 className="w-4 h-4 text-black/50 dark:text-white/50 group-hover:text-black dark:group-hover:text-white transition-colors" />
+              <span className="text-xs font-mono font-medium text-black/70 dark:text-white/70 w-12 text-center">
+                {offset > 0 ? '+' : ''}{offset.toFixed(1)}s
+              </span>
+              <input
+                type="range"
+                min="-5"
+                max="5"
+                step="0.1"
+                value={offset}
+                onChange={handleOffsetChange}
+                className="w-28 offset-slider"
+                title={`Lyrics offset: ${offset > 0 ? '+' : ''}${offset.toFixed(1)}s`}
+              />
+            </div>
           </div>
         </motion.div>
       )}
-    </div>
-  );
+      </div>  );
 }

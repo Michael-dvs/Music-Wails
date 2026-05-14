@@ -484,7 +484,9 @@ function App() {
     >
       {/* Static flat base — dynamic color is applied via CSS variables */}
 
-      <Sidebar activeTab={activeTab} setActiveTab={handleSetActiveTab} />
+      <div className={`h-full transition-all duration-500 ease-in-out flex-shrink-0 z-20 ${showLyrics ? 'w-0 -translate-x-full opacity-0 overflow-hidden' : 'w-60 translate-x-0 opacity-100'}`}>
+        <Sidebar activeTab={activeTab} setActiveTab={handleSetActiveTab} />
+      </div>
 
       {/* Main content area — relative so QueuePanel can overlay */}
       <div className="flex-1 relative h-full overflow-hidden">

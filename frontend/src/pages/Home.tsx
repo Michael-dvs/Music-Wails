@@ -147,7 +147,7 @@ export default function Home({ onPlaySong }: { onPlaySong: (song: main.Song, que
                       e.stopPropagation();
                       handlePlaylistClick(heroCategory.id);
                     }}
-                    className="text-black/60 dark:text-white/60 hover:text-black dark:hover:text-white text-sm underline underline-offset-4 decoration-white/20 hover:decoration-white/50 transition-all"
+                    className="text-black/60 dark:text-white/60 hover:text-brand-500 dark:hover:text-brand-400 text-sm underline underline-offset-4 decoration-white/20 hover:decoration-white/50 transition-all"
                   >
                     View All
                   </button>
@@ -185,7 +185,7 @@ export default function Home({ onPlaySong }: { onPlaySong: (song: main.Song, que
                 </div>
                 <button 
                   onClick={() => handlePlaylistClick(cat.id)}
-                  className="flex items-center space-x-1 text-sm text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white transition-colors group"
+                  className="flex items-center space-x-1 text-sm text-gray-600 dark:text-gray-400 hover:text-brand-500 dark:hover:text-brand-400 transition-colors group"
                 >
                   <span>See all</span>
                   <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />

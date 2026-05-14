@@ -40,7 +40,7 @@ export default function PlaylistDetail({ songs, playlistName, playlistColor, onP
           initial={{ opacity: 0, x: -10 }}
           animate={{ opacity: 1, x: 0 }}
           onClick={onBack}
-          className="absolute top-6 left-6 p-2 rounded-full bg-white/30 dark:bg-black/30 hover:bg-white/50 dark:hover:bg-black/50 backdrop-blur-md text-black/70 dark:text-white/70 hover:text-black dark:hover:text-white transition-all z-10"
+          className="absolute top-6 left-6 p-2 rounded-full bg-white/30 dark:bg-black/30 hover:bg-white/50 dark:hover:bg-black/50 backdrop-blur-md text-black/70 dark:text-white/70 hover:text-brand-500 dark:hover:text-brand-400 transition-all z-10"
         >
           <ArrowLeft className="w-5 h-5" />
         </motion.button>

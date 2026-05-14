@@ -262,7 +262,7 @@ export default function Lyrics({ currentSong, currentTime, lyrics, loading, isRe
               className={`flex items-center space-x-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-300 ${
                 autoScroll
                   ? 'bg-brand-500/20 text-brand-300 border border-brand-500/30'
-                  : 'bg-black/5 dark:bg-white/5 text-black/50 dark:text-white/50 border border-black/10 dark:border-white/10 hover:text-black dark:hover:text-white'
+                  : 'bg-black/5 dark:bg-white/5 text-black/50 dark:text-white/50 border border-black/10 dark:border-white/10 hover:text-brand-500 dark:hover:text-brand-400'
               }`}
               title={autoScroll ? 'Auto-Scroll ON — Click to enable Freedom Mode' : 'Freedom Mode ON — Manual scroll active'}
             >
@@ -275,7 +275,7 @@ export default function Lyrics({ currentSong, currentTime, lyrics, loading, isRe
 
             {/* Offset Slider */}
             <div className="flex items-center space-x-3">
-              <Settings2 className="w-4 h-4 text-black/50 dark:text-white/50 group-hover:text-black dark:group-hover:text-white transition-colors" />
+              <Settings2 className="w-4 h-4 text-black/50 dark:text-white/50 group-hover:text-brand-500 dark:group-hover:text-brand-400 transition-colors" />
               <span className="text-xs font-mono font-medium text-black/70 dark:text-white/70 w-12 text-center">
                 {offset > 0 ? '+' : ''}{offset.toFixed(1)}s
               </span>

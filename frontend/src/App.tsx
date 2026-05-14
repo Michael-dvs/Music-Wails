@@ -410,42 +410,41 @@ function App() {
 
     fetchLyricsBackground(song);
 
-    // Phase 1: iTunes preview — instant play
     const previewURL = getPreviewURL(song);
-    if (previewURL && audioRef.current) {
-      audioRef.current.src = previewURL;
-      audioRef.current.play()
-        .then(() => { setIsPlaying(true); setStreamLoading(false); })
-        .catch(err => { console.error('Preview error:', err); setStreamLoading(false); });
-    } else {
-      setStreamLoading(false);
-    }
 
-    // Phase 2: YouTube lazy-load (background)
+    const playFallback = () => {
+      setIsHighQuality(false);
+      if (previewURL && audioRef.current) {
+        audioRef.current.src = previewURL;
+        audioRef.current.play()
+          .then(() => { setIsPlaying(true); setStreamLoading(false); })
+          .catch(err => { console.error('Preview error:', err); setStreamLoading(false); });
+      } else {
+        setStreamLoading(false);
+      }
+    };
+
+    // Try YouTube high-quality stream first
     try {
       const ytURL = await GetFullStreamURL(song.artist, song.title);
-      if (ytURL && ytURL.trim() !== '') {
-        const savedTime = audioRef.current?.currentTime ?? 0;
-        if (audioRef.current) {
-          audioRef.current.src = ytURL;
-          audioRef.current.currentTime = savedTime;
-          audioRef.current.play()
-            .then(() => { setIsHighQuality(true); setIsPlaying(true); })
-            .catch(() => {
-              // Swap failed → restore preview
-              if (previewURL && audioRef.current) {
-                audioRef.current.src = previewURL;
-                audioRef.current.currentTime = savedTime;
-                audioRef.current.play().catch(() => {});
-              }
-              setIsHighQuality(false);
-            });
-        }
+      if (ytURL && ytURL.trim() !== '' && audioRef.current) {
+        audioRef.current.src = ytURL;
+        audioRef.current.play()
+          .then(() => { 
+            setIsHighQuality(true); 
+            setIsPlaying(true); 
+            setStreamLoading(false); 
+          })
+          .catch(() => {
+            playFallback();
+          });
+      } else {
+        playFallback();
       }
     } catch (e: any) {
       const is429 = String(e).includes('429') || String(e).includes('quota');
-      console.warn(`[YouTube] ${is429 ? 'Rate-limited (429)' : 'Error'} — staying on iTunes preview`);
-      setIsHighQuality(false);
+      console.warn(`[YouTube] ${is429 ? 'Rate-limited (429)' : 'Error'} — falling back to iTunes preview`);
+      playFallback();
     }
   }, [fetchLyricsBackground]);
 
@@ -491,18 +490,25 @@ function App() {
       {/* Main content area — relative so QueuePanel can overlay */}
       <div className="flex-1 relative h-full overflow-hidden">
         <main className="w-full h-full relative z-10">
-          <AnimatePresence mode="wait">
-            {activeTab === 'home' && !showLyrics && (
-              <Home key="home" onPlaySong={handlePlaySong} />
-            )}
-            {activeTab === 'search' && !showLyrics && (
-              <Search key="search" onPlaySong={handlePlaySong} />
-            )}
-            {(activeTab === 'library' || activeTab === 'playlists') && !showLyrics && (
-              <div key="placeholder" className="w-full h-full flex items-center justify-center text-gray-600 dark:text-gray-400">
-                <h2 className="text-2xl font-semibold capitalize">{activeTab} — Coming Soon</h2>
-              </div>
-            )}
+          {/* Main Content Tabs - Kept mounted underneath Lyrics to preserve state (e.g. Search results) */}
+          <div className="w-full h-full" style={{ display: showLyrics ? 'none' : 'block' }}>
+            <AnimatePresence mode="wait">
+              {activeTab === 'home' && (
+                <Home key="home" onPlaySong={handlePlaySong} />
+              )}
+              {activeTab === 'search' && (
+                <Search key="search" onPlaySong={handlePlaySong} />
+              )}
+              {(activeTab === 'library' || activeTab === 'playlists') && (
+                <div key="placeholder" className="w-full h-full flex items-center justify-center text-gray-600 dark:text-gray-400">
+                  <h2 className="text-2xl font-semibold capitalize">{activeTab} — Coming Soon</h2>
+                </div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* Lyrics Overlay */}
+          <AnimatePresence>
             {showLyrics && (
               <Lyrics
                 key="lyrics"

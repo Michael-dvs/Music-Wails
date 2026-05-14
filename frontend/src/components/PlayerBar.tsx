@@ -125,7 +125,7 @@ export default function PlayerBar({
             <div className="min-w-0">
               <div className="flex items-center space-x-2">
                 <h4 className="text-black dark:text-white font-semibold line-clamp-1 text-sm">{currentSong.title}</h4>
-                {/* Smart/Recommended Badge */}
+                {/* Smart/Recommended Badge
                 <AnimatePresence>
                   {(currentSong as any).source === 'lastfm' && (
                     <motion.div
@@ -139,6 +139,7 @@ export default function PlayerBar({
                     </motion.div>
                   )}
                 </AnimatePresence>
+                */}
               </div>
               <p className="text-gray-600 dark:text-gray-400 text-xs line-clamp-1">{currentSong.artist}</p>
             </div>
@@ -159,11 +160,11 @@ export default function PlayerBar({
         <div className="flex items-center space-x-6">
           <button 
             onClick={() => setIsShuffle(!isShuffle)}
-            className={`transition-colors hover:scale-110 active:scale-95 ${isShuffle ? 'text-brand-400' : 'text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white'}`}
+            className={`transition-colors hover:scale-110 active:scale-95 ${isShuffle ? 'text-brand-400' : 'text-gray-600 dark:text-gray-400 hover:text-brand-500 dark:hover:text-brand-400'}`}
           >
             <Shuffle className="w-4 h-4" />
           </button>
-          <button onClick={onPrev} className="text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white transition-colors hover:scale-110 active:scale-95">
+          <button onClick={onPrev} className="text-gray-600 dark:text-gray-400 hover:text-brand-500 dark:hover:text-brand-400 transition-colors hover:scale-110 active:scale-95">
             <SkipBack className="w-5 h-5 fill-current" />
           </button>
           <button 
@@ -181,10 +182,10 @@ export default function PlayerBar({
               <Play className="w-5 h-5 text-white dark:text-black fill-white dark:fill-black ml-1" />
             )}
           </button>
-          <button onClick={onNext} className="text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white transition-colors hover:scale-110 active:scale-95">
+          <button onClick={onNext} className="text-gray-600 dark:text-gray-400 hover:text-brand-500 dark:hover:text-brand-400 transition-colors hover:scale-110 active:scale-95">
             <SkipForward className="w-5 h-5 fill-current" />
           </button>
-          <button className="text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white transition-colors hover:scale-110 active:scale-95">
+          <button className="text-gray-600 dark:text-gray-400 hover:text-brand-500 dark:hover:text-brand-400 transition-colors hover:scale-110 active:scale-95">
             <Repeat className="w-4 h-4" />
           </button>
         </div>
@@ -212,7 +213,7 @@ export default function PlayerBar({
       {/* Volume & Extra Controls */}
       <div className="flex items-center justify-end space-x-4 w-1/3">
         {/* Smart Shuffle active indicator */}
-        <AnimatePresence>
+        {/*<AnimatePresence>
           {isSmartShuffleActive && (
             <motion.div
               initial={{ opacity: 0, scale: 0.8 }}
@@ -225,11 +226,12 @@ export default function PlayerBar({
             </motion.div>
           )}
         </AnimatePresence>
+        */}
 
         {/* Lyrics Button */}
         <button 
           onClick={() => setShowLyrics(!showLyrics)}
-          className={`transition-all hover:scale-110 active:scale-95 ${showLyrics ? 'text-brand-400' : 'text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white'}`}
+          className={`transition-all hover:scale-110 active:scale-95 ${showLyrics ? 'text-brand-400' : 'text-gray-600 dark:text-gray-400 hover:text-brand-500 dark:hover:text-brand-400'}`}
         >
           <Mic2 className="w-5 h-5" />
         </button>
@@ -238,7 +240,7 @@ export default function PlayerBar({
         <div className="relative">
           <button 
             onClick={() => setShowQueue(!showQueue)}
-            className={`transition-all hover:scale-110 active:scale-95 ${showQueue ? 'text-brand-400' : 'text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white'}`}
+            className={`transition-all hover:scale-110 active:scale-95 ${showQueue ? 'text-brand-400' : 'text-gray-600 dark:text-gray-400 hover:text-brand-500 dark:hover:text-brand-400'}`}
           >
             <ListMusic className="w-5 h-5" />
           </button>

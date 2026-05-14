@@ -33,7 +33,8 @@ export default function QueuePanel({
           <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-black/10 dark:border-white/10">
             <div className="flex items-center space-x-2">
               <h2 className="text-black dark:text-white font-semibold text-lg">Up Next</h2>
-              {isSmartShuffleActive && (
+              {/* smart shufle indicator on queue panel*/}
+              {/*isSmartShuffleActive && (
                 <motion.div
                   initial={{ scale: 0 }}
                   animate={{ scale: 1 }}
@@ -42,11 +43,11 @@ export default function QueuePanel({
                   <Sparkles className="w-3 h-3 text-purple-400" />
                   <span className="text-purple-300 text-xs font-medium">Smart</span>
                 </motion.div>
-              )}
+              )*/}
             </div>
             <button
               onClick={onClose}
-              className="p-1.5 rounded-full hover:bg-black/10 dark:hover:bg-white/10 text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white transition-colors"
+              className="p-1.5 rounded-full hover:bg-black/10 dark:hover:bg-white/10 text-gray-600 dark:text-gray-400 hover:text-brand-500 dark:hover:text-brand-400 transition-colors"
             >
               <X className="w-4 h-4" />
             </button>
@@ -100,7 +101,7 @@ export default function QueuePanel({
 
                     {/* Track Info */}
                     <div className="flex-1 min-w-0">
-                      <p className={`text-sm font-medium truncate ${isActive ? 'text-black dark:text-white' : 'text-gray-800 dark:text-gray-200 group-hover:text-black dark:hover:text-white'}`}>
+                      <p className={`text-sm font-medium truncate ${isActive ? 'text-black dark:text-white' : 'text-gray-800 dark:text-gray-200 group-hover:text-brand-500 dark:hover:text-brand-400'}`}>
                         {track.title}
                       </p>
                       <p className="text-xs text-gray-600 dark:text-gray-400 truncate">{track.artist}</p>

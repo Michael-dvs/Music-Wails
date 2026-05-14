@@ -38,7 +38,7 @@ export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
               className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg transition-all duration-200 text-[13px] font-medium ${
                 isActive
                   ? 'bg-brand-500/15 text-brand-400'
-                  : 'text-[var(--app-text-secondary)] hover:bg-black/5 dark:hover:bg-white/5 hover:text-black dark:hover:text-white'
+                  : 'text-[var(--app-text-secondary)] hover:bg-black/5 dark:hover:bg-white/5 hover:text-brand-500 dark:hover:text-brand-400'
               }`}
             >
               <Icon

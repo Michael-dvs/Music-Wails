@@ -148,7 +148,7 @@ export default function Search({ onPlaySong }: { onPlaySong: (song: main.Song, q
           {query.length > 0 && !loading && (
             <button 
               onClick={() => { setQuery(''); setResults([]); }}
-              className="p-1 rounded-full hover:bg-black/10 dark:hover:bg-white/10 text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white transition-colors"
+              className="p-1 rounded-full hover:bg-black/10 dark:hover:bg-white/10 text-gray-600 dark:text-gray-400 hover:text-brand-500 dark:hover:text-brand-400 transition-colors"
             >
               <X className="w-4 h-4" />
             </button>
@@ -180,13 +180,13 @@ export default function Search({ onPlaySong }: { onPlaySong: (song: main.Song, q
                 className="group flex items-center space-x-1.5 bg-black/8 dark:bg-white/8 hover:bg-black/15 dark:hover:bg-white/15 backdrop-blur-md border border-black/10 dark:border-white/10 hover:border-black/20 dark:border-white/20 rounded-full px-3 py-1.5 cursor-pointer transition-all duration-200"
                 onClick={() => handleHistoryClick(term)}
               >
-                <span className="text-sm text-gray-700 dark:text-gray-300 group-hover:text-black dark:hover:text-white transition-colors">{term}</span>
+                <span className="text-sm text-gray-700 dark:text-gray-300 group-hover:text-brand-500 dark:hover:text-brand-400 transition-colors">{term}</span>
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
                     handleHistoryRemove(term);
                   }}
-                  className="p-0.5 rounded-full opacity-0 group-hover:opacity-100 hover:bg-black/10 dark:hover:bg-white/10 text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white transition-all"
+                  className="p-0.5 rounded-full opacity-0 group-hover:opacity-100 hover:bg-black/10 dark:hover:bg-white/10 text-gray-600 dark:text-gray-400 hover:text-brand-500 dark:hover:text-brand-400 transition-all"
                 >
                   <X className="w-3 h-3" />
                 </button>

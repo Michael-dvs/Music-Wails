@@ -1,11 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -13,7 +15,9 @@ import (
 	"github.com/kkdai/youtube/v2"
 	google_youtube "google.golang.org/api/youtube/v3"
 	"google.golang.org/api/option"
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
+
 
 const (
 	lastFMAPIKey    = "9843ca4442b8b4a0127aa345029e9bb4"
@@ -29,19 +33,539 @@ type lyricsCacheEntry struct {
 
 // App struct
 type App struct {
-	ctx         context.Context
-	lyricsCache sync.Map // map[string]lyricsCacheEntry — TTL 60s
+	ctx          context.Context
+	lyricsCache  sync.Map // map[string]lyricsCacheEntry — TTL 60s
+	sbURL        string   // Supabase project URL
+	sbAnonKey        string   // publishable key (for user-scoped requests)
+	sbServiceKey     string   // secret key (for admin operations)
+	currentUserToken string   // currently active user session token
 }
 
 // NewApp creates a new App application struct
 func NewApp() *App {
-	return &App{}
+	return &App{
+		sbURL:        getEnv("SUPABASE_URL",         ""),
+		sbAnonKey:    getEnv("SUPABASE_ANON_KEY",     ""),
+		sbServiceKey: getEnv("SUPABASE_SERVICE_KEY",  ""),
+	}
 }
 
-// startup is called when the app starts. The context is saved
-// so we can call the runtime methods
+// getEnv reads an env var with a fallback (used before godotenv is viable)
+func getEnv(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
+}
+
+// startup is called when the app starts.
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+}
+
+// ─────────────────────────────────────────────
+//  SUPABASE AUTH & DATABASE TYPES
+// ─────────────────────────────────────────────
+
+// UserProfile mirrors the 'profiles' table in Supabase
+type UserProfile struct {
+	ID        string `json:"id"`
+	Username  string `json:"username"`
+	AvatarURL string `json:"avatar_url"`
+	Role      string `json:"role"`  // "user" | "admin"
+	CreatedAt string `json:"created_at"`
+}
+
+// FavoriteTrack mirrors 'user_favorites' table
+type FavoriteTrack struct {
+	ID             string `json:"id"`
+	UserID         string `json:"user_id"`
+	ItunesTrackID  string `json:"itunes_track_id"`
+	Title          string `json:"title"`
+	Artist         string `json:"artist"`
+	Album          string `json:"album"`
+	ArtworkURL     string `json:"artwork_url"`
+	PreviewURL     string `json:"preview_url"`
+	AddedAt        string `json:"added_at"`
+}
+
+// HomeSettingRow mirrors 'home_settings' table
+type HomeSettingRow struct {
+	ID           string `json:"id"`
+	SectionTitle string `json:"section_title"`
+	ItunesID     string `json:"itunes_id"`
+	Category     string `json:"category"`
+	DisplayOrder int    `json:"display_order"`
+	IsActive     bool   `json:"is_active"`
+}
+
+// AuthUserInfo is the response from Supabase /auth/v1/user
+type AuthUserInfo struct {
+	ID    string `json:"id"`
+	Email string `json:"email"`
+	Role  string `json:"role"`
+}
+
+// ─────────────────────────────────────────────
+//  SUPABASE HELPER — authenticated HTTP request
+// ─────────────────────────────────────────────
+
+func (a *App) sbRequest(method, path, bearerToken string, body interface{}) (*http.Response, error) {
+	if a.sbURL == "" || a.sbURL == "YOUR_SUPABASE" {
+		return nil, fmt.Errorf("SUPABASE_URL not configured. Edit .env and restart")
+	}
+
+	var reqBody *bytes.Reader
+	if body != nil {
+		b, err := json.Marshal(body)
+		if err != nil {
+			return nil, err
+		}
+		reqBody = bytes.NewReader(b)
+	} else {
+		reqBody = bytes.NewReader(nil)
+	}
+
+	fullURL := a.sbURL + path
+	req, err := http.NewRequest(method, fullURL, reqBody)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("apikey", a.sbAnonKey)
+	req.Header.Set("Content-Type", "application/json")
+	if bearerToken != "" {
+		req.Header.Set("Authorization", "Bearer "+bearerToken)
+	} else if a.currentUserToken != "" {
+		req.Header.Set("Authorization", "Bearer "+a.currentUserToken)
+	} else {
+		req.Header.Set("Authorization", "Bearer "+a.sbAnonKey)
+	}
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	return client.Do(req)
+
+	
+}
+
+// sbAdminRequest uses the service_role key for admin operations
+func (a *App) sbAdminRequest(method, path string, body interface{}) (*http.Response, error) {
+	if a.sbServiceKey == "" {
+		return nil, fmt.Errorf("SUPABASE_SERVICE_KEY not configured")
+	}
+
+	var reqBody *bytes.Reader
+	if body != nil {
+		b, err := json.Marshal(body)
+		if err != nil {
+			return nil, err
+		}
+		reqBody = bytes.NewReader(b)
+	} else {
+		reqBody = bytes.NewReader(nil)
+	}
+
+	req, err := http.NewRequest(method, a.sbURL+path, reqBody)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("apikey", a.sbServiceKey)
+	req.Header.Set("Authorization", "Bearer "+a.sbServiceKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	return client.Do(req)
+}
+
+// ─────────────────────────────────────────────
+//  SUPABASE AUTH FUNCTIONS
+// ─────────────────────────────────────────────
+
+// CheckAuthSession validates a JWT token and returns the user info.
+// Called by frontend on startup to verify stored session is still valid.
+func (a *App) CheckAuthSession(token string) (AuthUserInfo, error) {
+	resp, err := a.sbRequest("GET", "/auth/v1/user", token, nil)
+	if err != nil {
+		return AuthUserInfo{}, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return AuthUserInfo{}, fmt.Errorf("session invalid (status %d)", resp.StatusCode)
+	}
+
+	var info AuthUserInfo
+	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
+		return AuthUserInfo{}, err
+	}
+	return info, nil
+}
+
+// GetUserProfile fetches the user's profile from 'profiles' table.
+func (a *App) GetUserProfile(token string) (UserProfile, error) {
+	resp, err := a.sbRequest("GET", "/rest/v1/profiles?select=*", token, nil)
+	if err != nil {
+		return UserProfile{}, err
+	}
+	defer resp.Body.Close()
+
+	var profiles []UserProfile
+	if err := json.NewDecoder(resp.Body).Decode(&profiles); err != nil {
+		return UserProfile{}, err
+	}
+	if len(profiles) == 0 {
+		return UserProfile{}, fmt.Errorf("profile not found")
+	}
+	return profiles[0], nil
+}
+
+// GetFavorites returns all favorite tracks for the authenticated user.
+func (a *App) GetFavorites(token string) ([]FavoriteTrack, error) {
+	resp, err := a.sbRequest("GET", "/rest/v1/user_favorites?select=*&order=added_at.desc", token, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var tracks []FavoriteTrack
+	if err := json.NewDecoder(resp.Body).Decode(&tracks); err != nil {
+		return nil, err
+	}
+	return tracks, nil
+}
+
+// AddFavorite inserts a track into user_favorites.
+func (a *App) AddFavorite(token, itunesID, title, artist, album, artworkURL, previewURL string) error {
+	body := map[string]interface{}{
+		"itunes_track_id": itunesID,
+		"title":          title,
+		"artist":         artist,
+		"album":          album,
+		"artwork_url":    artworkURL,
+		"preview_url":    previewURL,
+	}
+	resp, err := a.sbRequest("POST", "/rest/v1/user_favorites", token, body)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		return fmt.Errorf("add favorite failed: status %d", resp.StatusCode)
+	}
+	return nil
+}
+
+// RemoveFavorite deletes a track from user_favorites.
+func (a *App) RemoveFavorite(token, itunesID string) error {
+	path := "/rest/v1/user_favorites?itunes_track_id=eq." + itunesID
+	resp, err := a.sbRequest("DELETE", path, token, nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		return fmt.Errorf("remove favorite failed: status %d", resp.StatusCode)
+	}
+	return nil
+}
+
+// GetHomeSettings returns the home playlist config (all authenticated users).
+func (a *App) GetHomeSettings(token string) ([]HomeSettingRow, error) {
+	resp, err := a.sbRequest("GET", "/rest/v1/home_settings?select=*&is_active=eq.true&order=display_order.asc", token, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var rows []HomeSettingRow
+	if err := json.NewDecoder(resp.Body).Decode(&rows); err != nil {
+		return nil, err
+	}
+	return rows, nil
+}
+
+// UpdateHomeContent updates a home_settings row — ADMIN ONLY.
+// The frontend should verify role before calling, but this function
+// also validates via Supabase RLS (server-side enforcement).
+func (a *App) UpdateHomeContent(token string, row HomeSettingRow) error {
+	// First verify the user is admin
+	profile, err := a.GetUserProfile(token)
+	if err != nil {
+		return fmt.Errorf("could not verify user profile: %w", err)
+	}
+	if profile.Role != "admin" {
+		return fmt.Errorf("permission denied: admin role required")
+	}
+
+	body := map[string]interface{}{
+		"section_title": row.SectionTitle,
+		"itunes_id":     row.ItunesID,
+		"category":      row.Category,
+		"display_order": row.DisplayOrder,
+		"is_active":     row.IsActive,
+	}
+	path := "/rest/v1/home_settings?id=eq." + row.ID
+	resp, err := a.sbRequest("PATCH", path, token, body)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		return fmt.Errorf("update home content failed: status %d", resp.StatusCode)
+	}
+	return nil
+}
+
+// ─────────────────────────────────────────────────────────────
+//  GOOGLE OAUTH VIA EXTERNAL BROWSER
+//  Flow:
+//   1. Go opens system browser → Supabase OAuth URL
+//   2. Temporary HTTP server on :54321 waits for the callback
+//   3. Callback HTML reads tokens from URL fragment via JS
+//   4. JS POSTs tokens to /token → Go captures them
+//   5. Go emits Wails event "auth:google:success" to React
+//   6. React calls supabase.auth.setSession() → app unlocks
+// ─────────────────────────────────────────────────────────────
+
+const oauthCallbackPort = 54321
+
+// oauthResult carries tokens (or an error) from the local HTTP callback
+type oauthResult struct {
+	AccessToken  string
+	RefreshToken string
+	Error        string
+}
+
+// StartGoogleLogin opens the system browser for Google OAuth and
+// starts a temporary local server to capture the Supabase callback.
+// This is non-blocking — the result arrives via Wails event "auth:google:success".
+func (a *App) StartGoogleLogin() error {
+	if a.sbURL == "" || a.sbURL == "YOUR_SUPABASE" {
+		return fmt.Errorf("SUPABASE_URL not configured — edit .env dan restart")
+	}
+
+	redirectTo := fmt.Sprintf("http://localhost:%d/callback", oauthCallbackPort)
+
+	authURL := fmt.Sprintf(
+		"%s/auth/v1/authorize?provider=google&redirect_to=%s",
+		a.sbURL,
+		url.QueryEscape(redirectTo),
+	)
+
+	// Start the local callback server
+	resultCh, stopServer := a.startOAuthCallbackServer()
+
+	// Open system browser (Chrome, Edge, Firefox — whatever the OS default is)
+	runtime.BrowserOpenURL(a.ctx, authURL)
+
+	// Wait for callback asynchronously — don't block the UI
+	go func() {
+		select {
+		case res := <-resultCh:
+			stopServer() // shut down the HTTP server
+			if res.Error != "" {
+				runtime.EventsEmit(a.ctx, "auth:google:error", res.Error)
+				return
+			}
+			// Success — save token to Go backend instance and emit event
+			a.currentUserToken = res.AccessToken
+			runtime.EventsEmit(a.ctx, "login-success", map[string]string{
+				"access_token":  res.AccessToken,
+				"refresh_token": res.RefreshToken,
+			})
+
+		case <-time.After(10 * time.Minute):
+			stopServer()
+			runtime.EventsEmit(a.ctx, "auth:google:error", "Login timeout setelah 10 menit.")
+		}
+	}()
+
+	return nil
+}
+
+// startOAuthCallbackServer starts a local HTTP server on :54321.
+// Returns a channel that delivers the result and a stop function.
+func (a *App) startOAuthCallbackServer() (<-chan oauthResult, func()) {
+	resultCh := make(chan oauthResult, 1)
+
+	// ── Callback page: returns HTML that reads the URL fragment via JS ──
+	callbackHTML := fmt.Sprintf(`<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <title>Music-Wails — Login Google</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display',sans-serif;
+         background:#0c0c0c;color:#fff;display:flex;align-items:center;
+         justify-content:center;height:100vh;flex-direction:column;gap:16px}
+    .icon{font-size:48px;margin-bottom:8px}
+    h2{font-size:20px;font-weight:600}
+    p{color:#8e8e93;font-size:14px;text-align:center;max-width:320px}
+  </style>
+</head>
+<body>
+  <div class="icon" id="icon">⏳</div>
+  <h2 id="title">Memproses login...</h2>
+  <p id="msg">Harap tunggu sebentar</p>
+  <script>
+  (function() {
+    var hashParams  = new URLSearchParams(window.location.hash.slice(1));
+    var queryParams = new URLSearchParams(window.location.search);
+
+    var accessToken  = hashParams.get('access_token')  || queryParams.get('access_token');
+    var refreshToken = hashParams.get('refresh_token') || queryParams.get('refresh_token') || '';
+    var code         = queryParams.get('code');
+    var err          = hashParams.get('error_description') || hashParams.get('error') ||
+                       queryParams.get('error_description') || queryParams.get('error');
+    function showSuccess() {
+      document.getElementById('icon').textContent  = '✅';
+      document.getElementById('title').textContent = 'Login Berhasil!';
+      document.getElementById('msg').textContent   = 'Tab ini akan tertutup otomatis dalam 2 detik.';
+      setTimeout(function() { window.close(); }, 2000);
+    }
+    function showError(msg) {
+      document.getElementById('icon').textContent  = '❌';
+      document.getElementById('title').textContent = 'Login Gagal';
+      document.getElementById('msg').textContent   = msg;
+    }
+
+    if (accessToken) {
+      fetch('http://localhost:%d/token', {
+        method:  'POST',
+        headers: {'Content-Type':'application/json'},
+        body:    JSON.stringify({access_token: accessToken, refresh_token: refreshToken})
+      }).then(showSuccess).catch(function(){ showSuccess(); });
+
+    } else if (code) {
+      fetch('http://localhost:%d/code', {
+        method:  'POST',
+        headers: {'Content-Type':'application/json'},
+        body:    JSON.stringify({code: code})
+      }).then(showSuccess).catch(function(){ showSuccess(); });
+
+    } else if (err) {
+      showError(err);
+      fetch('http://localhost:%d/error', {
+        method:  'POST',
+        headers: {'Content-Type':'application/json'},
+        body:    JSON.stringify({error: err})
+      }).catch(function(){});
+
+    } else {
+      showError('Tidak ada data login. Silakan coba lagi.');
+    }
+  })();
+  </script>
+</body>
+</html>`, oauthCallbackPort, oauthCallbackPort, oauthCallbackPort)
+
+	mux := http.NewServeMux()
+
+	// /callback — Supabase redirects here; page JS reads tokens from hash
+	mux.HandleFunc("/callback", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, callbackHTML)
+	})
+
+	// /token — receives { access_token, refresh_token } from the HTML page JS
+	mux.HandleFunc("/token", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodOptions {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		var payload struct {
+			AccessToken  string `json:"access_token"`
+			RefreshToken string `json:"refresh_token"`
+		}
+		json.NewDecoder(r.Body).Decode(&payload)
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.WriteHeader(http.StatusOK)
+		// Non-blocking send — ignore if already sent
+		select {
+		case resultCh <- oauthResult{AccessToken: payload.AccessToken, RefreshToken: payload.RefreshToken}:
+		default:
+		}
+	})
+
+	// /code — receives { code } for PKCE flow; exchanges it for tokens
+	mux.HandleFunc("/code", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodOptions {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		var payload struct{ Code string `json:"code"` }
+		json.NewDecoder(r.Body).Decode(&payload)
+
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.WriteHeader(http.StatusOK)
+
+		// Exchange code → tokens via Supabase REST
+		go func() {
+			body := map[string]interface{}{
+				"auth_code":    payload.Code,
+				"redirect_uri": fmt.Sprintf("http://localhost:%d/callback", oauthCallbackPort),
+			}
+			resp, err := a.sbRequest("POST", "/auth/v1/token?grant_type=pkce", "", body)
+			if err != nil {
+				select {
+				case resultCh <- oauthResult{Error: err.Error()}:
+				default:
+				}
+				return
+			}
+			defer resp.Body.Close()
+			var session struct {
+				AccessToken  string `json:"access_token"`
+				RefreshToken string `json:"refresh_token"`
+				Error        string `json:"error_description"`
+			}
+			json.NewDecoder(resp.Body).Decode(&session)
+			if session.Error != "" {
+				select {
+				case resultCh <- oauthResult{Error: session.Error}:
+				default:
+				}
+				return
+			}
+			select {
+			case resultCh <- oauthResult{AccessToken: session.AccessToken, RefreshToken: session.RefreshToken}:
+			default:
+			}
+		}()
+	})
+
+	// /error — receives error from the HTML page JS
+	mux.HandleFunc("/error", func(w http.ResponseWriter, r *http.Request) {
+		var payload struct{ Error string `json:"error"` }
+		json.NewDecoder(r.Body).Decode(&payload)
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.WriteHeader(http.StatusOK)
+		select {
+		case resultCh <- oauthResult{Error: payload.Error}:
+		default:
+		}
+	})
+
+	srv := &http.Server{
+		Addr:    fmt.Sprintf(":%d", oauthCallbackPort),
+		Handler: mux,
+	}
+	go func() { _ = srv.ListenAndServe() }()
+
+	stop := func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		_ = srv.Shutdown(ctx)
+	}
+
+	return resultCh, stop
 }
 
 // Song represents the track data returned to the frontend (Search / Playlist)

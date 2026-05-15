@@ -1,7 +1,10 @@
 package main
 
 import (
+	"bufio"
 	"embed"
+	"os"
+	"strings"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -13,7 +16,35 @@ import (
 //go:embed all:frontend/dist
 var assets embed.FS
 
+//go:embed .env
+var envContent string
+
+// loadDotEnv reads the embedded .env content and sets each KEY=VALUE as an os environment variable.
+// This is a minimal implementation that avoids adding an external dependency.
+func loadDotEnv() {
+	scanner := bufio.NewScanner(strings.NewReader(envContent))
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		key := strings.TrimSpace(parts[0])
+		val := strings.TrimSpace(parts[1])
+		// Only set if not already set (env var takes precedence over .env)
+		if os.Getenv(key) == "" {
+			os.Setenv(key, val)
+		}
+	}
+}
+
 func main() {
+	// Load embedded .env before creating the app so credentials are available
+	loadDotEnv()
+
 	// Create an instance of the app structure
 	app := NewApp()
 
@@ -25,7 +56,7 @@ func main() {
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},
-		BackgroundColour: &options.RGBA{R: 27, G: 38, B: 54, A: 1},
+		BackgroundColour: &options.RGBA{R: 12, G: 12, B: 12, A: 1},
 		OnStartup:        app.startup,
 		Bind: []interface{}{
 			app,

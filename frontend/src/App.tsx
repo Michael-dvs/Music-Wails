@@ -7,6 +7,8 @@ import QueuePanel from './components/QueuePanel';
 import Search from './pages/Search';
 import Home from './pages/Home';
 import Lyrics from './pages/Lyrics';
+import LoginPage from './pages/LoginPage';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 
 import { main } from '../wailsjs/go/models';
 import { GetFullStreamURL, GetLyrics, BuildSmartQueue } from '../wailsjs/go/main/App';
@@ -56,10 +58,12 @@ function getPreviewURL(track: AnyTrack): string {
 }
 
 // ──────────────────────────────────────────
-//  App
+//  App (authenticated music player)
 // ──────────────────────────────────────────
-function App() {
+function MusicApp() {
   const [activeTab, setActiveTab] = useState('home');
+  const [sidebarWidth, setSidebarWidth] = useState(240);
+  const [isDragging, setIsDragging] = useState(false);
 
   // Current playback
   const [currentSong, setCurrentSong] = useState<AnyTrack | null>(null);
@@ -99,6 +103,28 @@ function App() {
 
   useEffect(() => { currentSongRef.current = currentSong; }, [currentSong]);
   useEffect(() => { isGeneratingRef.current = isGeneratingQueue; }, [isGeneratingQueue]);
+
+  // ── Dragging logic for Sidebar ──
+  useEffect(() => {
+    if (!isDragging) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      e.preventDefault();
+      const newWidth = Math.min(Math.max(e.clientX, 160), 400);
+      setSidebarWidth(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging]);
 
   // ── ColorThief — ONLY extract color for Lyrics page background ──
   useEffect(() => {
@@ -479,62 +505,77 @@ function App() {
 
   return (
     <div
-      className="h-screen w-screen overflow-hidden flex relative bg-[var(--app-bg)] text-[var(--app-text)] transition-colors duration-300"
+      className="h-screen w-screen overflow-hidden flex flex-col relative bg-[var(--app-bg)] text-[var(--app-text)] transition-colors duration-300"
     >
-      {/* Static flat base — dynamic color is applied via CSS variables */}
+      <div className="flex-1 flex overflow-hidden w-full relative">
+        <div 
+          className={`h-full flex-shrink-0 z-20 relative flex ${
+            showLyrics 
+              ? 'w-0 -translate-x-full opacity-0 overflow-hidden transition-all duration-500 ease-in-out' 
+              : 'translate-x-0 opacity-100'
+          } ${!isDragging && !showLyrics ? 'transition-all duration-500 ease-in-out' : ''}`}
+          style={!showLyrics ? { width: sidebarWidth } : {}}
+        >
+          <div className="flex-1 w-full h-full overflow-hidden">
+            <Sidebar activeTab={activeTab} setActiveTab={handleSetActiveTab} />
+          </div>
+          {!showLyrics && (
+            <div 
+              className="absolute top-0 right-0 w-1.5 h-full cursor-col-resize hover:bg-brand-500/50 active:bg-brand-500 z-50 transition-colors"
+              onMouseDown={(e) => { e.preventDefault(); setIsDragging(true); }}
+            />
+          )}
+        </div>
 
-      <div className={`h-full transition-all duration-500 ease-in-out flex-shrink-0 z-20 ${showLyrics ? 'w-0 -translate-x-full opacity-0 overflow-hidden' : 'w-60 translate-x-0 opacity-100'}`}>
-        <Sidebar activeTab={activeTab} setActiveTab={handleSetActiveTab} />
-      </div>
+        {/* Main content area — relative so QueuePanel can overlay */}
+        <div className="flex-1 relative h-full overflow-hidden">
+          <main className="w-full h-full relative z-10">
+            {/* Main Content Tabs - Kept mounted underneath Lyrics to preserve state (e.g. Search results) */}
+            <div className="w-full h-full" style={{ display: showLyrics ? 'none' : 'block' }}>
+              <AnimatePresence mode="wait">
+                {activeTab === 'home' && (
+                  <Home key="home" onPlaySong={handlePlaySong} />
+                )}
+                {activeTab === 'search' && (
+                  <Search key="search" onPlaySong={handlePlaySong} />
+                )}
+                {(activeTab === 'library' || activeTab === 'playlists') && (
+                  <div key="placeholder" className="w-full h-full flex items-center justify-center text-gray-600 dark:text-gray-400">
+                    <h2 className="text-2xl font-semibold capitalize">{activeTab} — Coming Soon</h2>
+                  </div>
+                )}
+              </AnimatePresence>
+            </div>
 
-      {/* Main content area — relative so QueuePanel can overlay */}
-      <div className="flex-1 relative h-full overflow-hidden">
-        <main className="w-full h-full relative z-10">
-          {/* Main Content Tabs - Kept mounted underneath Lyrics to preserve state (e.g. Search results) */}
-          <div className="w-full h-full" style={{ display: showLyrics ? 'none' : 'block' }}>
-            <AnimatePresence mode="wait">
-              {activeTab === 'home' && (
-                <Home key="home" onPlaySong={handlePlaySong} />
-              )}
-              {activeTab === 'search' && (
-                <Search key="search" onPlaySong={handlePlaySong} />
-              )}
-              {(activeTab === 'library' || activeTab === 'playlists') && (
-                <div key="placeholder" className="w-full h-full flex items-center justify-center text-gray-600 dark:text-gray-400">
-                  <h2 className="text-2xl font-semibold capitalize">{activeTab} — Coming Soon</h2>
-                </div>
+            {/* Lyrics Overlay */}
+            <AnimatePresence>
+              {showLyrics && (
+                <Lyrics
+                  key="lyrics"
+                  currentSong={currentSong as main.Song}
+                  currentTime={currentTimeSeconds}
+                  lyrics={globalLyrics}
+                  loading={isLyricsLoading}
+                  isRetrying={isLyricsRetrying}
+                  audioDuration={audioDuration}
+                  lrcDuration={lrcDuration}
+                  bgColor={lyricsBgColor}
+                />
               )}
             </AnimatePresence>
+          </main>
+
+          {/* Queue Panel — ref for click-outside detection */}
+          <div ref={queuePanelRef}>
+            <QueuePanel
+              isOpen={showQueue}
+              onClose={() => setShowQueue(false)}
+              queue={queue as main.SmartTrack[]}
+              currentSong={currentSong as main.SmartTrack}
+              onPlayTrack={(track) => playSongCore(track, queueRef.current)}
+              isSmartShuffleActive={isSmartShuffleActive}
+            />
           </div>
-
-          {/* Lyrics Overlay */}
-          <AnimatePresence>
-            {showLyrics && (
-              <Lyrics
-                key="lyrics"
-                currentSong={currentSong as main.Song}
-                currentTime={currentTimeSeconds}
-                lyrics={globalLyrics}
-                loading={isLyricsLoading}
-                isRetrying={isLyricsRetrying}
-                audioDuration={audioDuration}
-                lrcDuration={lrcDuration}
-                bgColor={lyricsBgColor}
-              />
-            )}
-          </AnimatePresence>
-        </main>
-
-        {/* Queue Panel — ref for click-outside detection */}
-        <div ref={queuePanelRef}>
-          <QueuePanel
-            isOpen={showQueue}
-            onClose={() => setShowQueue(false)}
-            queue={queue as main.SmartTrack[]}
-            currentSong={currentSong as main.SmartTrack}
-            onPlayTrack={(track) => playSongCore(track, queueRef.current)}
-            isSmartShuffleActive={isSmartShuffleActive}
-          />
         </div>
       </div>
 
@@ -568,5 +609,38 @@ function App() {
     </div>
   );
 }
+// \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+//  Auth Gate — shows LoginPage or MusicApp based on session
+// \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+function AuthGate() {
+  const { user, isLoading } = useAuth();
 
-export default App;
+  if (isLoading) {
+    // Splash screen while restoring session
+    return (
+      <div className="h-screen w-screen bg-[#0c0c0c] flex items-center justify-center">
+        <div className="flex flex-col items-center space-y-4">
+          <div className="w-12 h-12 rounded-2xl bg-brand-500 flex items-center justify-center animate-pulse shadow-xl shadow-brand-500/30">
+            <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
+            </svg>
+          </div>
+          <p className="text-[var(--app-text-secondary)] text-sm">Memuat sesi...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return user ? <MusicApp /> : <LoginPage />;
+}
+
+// ──────────────────────────────────────────
+//  Root App — wraps everything with AuthProvider
+// ──────────────────────────────────────────
+export default function App() {
+  return (
+    <AuthProvider>
+      <AuthGate />
+    </AuthProvider>
+  );
+}

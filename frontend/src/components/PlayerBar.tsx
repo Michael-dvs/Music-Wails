@@ -74,7 +74,7 @@ export default function PlayerBar({
   };
 
   return (
-    <div className="h-24 w-full glass-panel absolute bottom-0 left-0 flex items-center px-6 justify-between z-20">
+    <div className="h-24 w-full glass-panel flex items-center px-6 justify-between z-20 relative flex-shrink-0">
       
       {/* Live Stats indicator for stream status */}
       <div className="absolute top-0 left-0 -mt-8 ml-6 flex items-center space-x-2">
@@ -122,24 +122,11 @@ export default function PlayerBar({
                 </div>
               )}
             </div>
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1 overflow-hidden">
               <div className="flex items-center space-x-2">
-                <h4 className="text-black dark:text-white font-semibold line-clamp-1 text-sm">{currentSong.title}</h4>
-                {/* Smart/Recommended Badge
-                <AnimatePresence>
-                  {(currentSong as any).source === 'lastfm' && (
-                    <motion.div
-                      initial={{ opacity: 0, scale: 0.8 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.8 }}
-                      className="flex items-center space-x-1 bg-purple-500/20 text-purple-300 text-[10px] px-1.5 py-0.5 rounded-full border border-purple-500/30 flex-shrink-0"
-                    >
-                      <Sparkles className="w-2.5 h-2.5" />
-                      <span>Smart</span>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-                */}
+                <div className="running-text-container">
+                  <h4 className="text-black dark:text-white font-semibold text-sm running-text">{currentSong.title}</h4>
+                </div>
               </div>
               <p className="text-gray-600 dark:text-gray-400 text-xs line-clamp-1">{currentSong.artist}</p>
             </div>

@@ -230,7 +230,7 @@ export default function Lyrics({ currentSong, currentTime, lyrics, loading, isRe
                   transition={{ repeat: Infinity, duration: 1.5 }}
                   className="text-sm text-black/30 dark:text-white/30"
                 >
-                  ✦
+                  
                 </motion.span>
               </motion.div>
             </div>

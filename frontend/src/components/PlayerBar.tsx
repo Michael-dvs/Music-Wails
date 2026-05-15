@@ -77,7 +77,7 @@ export default function PlayerBar({
     <div className="h-24 w-full glass-panel flex items-center px-6 justify-between z-20 relative flex-shrink-0">
       
       {/* Live Stats indicator for stream status */}
-      <div className="absolute top-0 left-0 -mt-8 ml-6 flex items-center space-x-2">
+      <div className="absolute top-0 left-1/3 -mt-8 flex items-center space-x-2">
         {streamLoading ? (
           <motion.div 
             initial={{ opacity: 0, y: 5 }}

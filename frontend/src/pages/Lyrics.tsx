@@ -13,9 +13,10 @@ interface LyricsProps {
   audioDuration: number;
   lrcDuration: number;
   bgColor: string; // dominant color from album art (Apple Music style)
+  onClose: () => void;
 }
 
-export default function Lyrics({ currentSong, currentTime, lyrics, loading, isRetrying, audioDuration, lrcDuration, bgColor }: LyricsProps) {
+export default function Lyrics({ currentSong, currentTime, lyrics, loading, isRetrying, audioDuration, lrcDuration, bgColor, onClose }: LyricsProps) {
   const [activeLine, setActiveLine] = useState<number>(-1);
   const scrollRef = useRef<HTMLDivElement>(null);
   const lineRefs = useRef<(HTMLParagraphElement | null)[]>([]);
@@ -134,6 +135,17 @@ export default function Lyrics({ currentSong, currentTime, lyrics, loading, isRe
       {/* Dark vignette over art */}
       <div className="absolute inset-0 bg-white/55 dark:bg-black/55 pointer-events-none" />
 
+      {/* Close Button */}
+      <motion.button
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onClose}
+        className="absolute top-12 left-0 z-[60] flex items-center justify-center w-12 h-12 rounded-full bg-black/10 dark:bg-white/10 backdrop-blur-md border border-black/10 dark:border-white/10 hover:bg-white/50 dark:hover:bg-black/50 transition-all duration-500 ease-out group/close -translate-x-1/2 hover:translate-x-4 cursor-pointer shadow-lg"
+      >
+        <X className="w-5 h-5 text-black/50 dark:text-white/50 group-hover/close:text-black dark:group-hover/close:text-white transition-all duration-500 opacity-0 group-hover/close:opacity-100 scale-50 group-hover/close:scale-100" />
+      </motion.button>
+
       {/* Duration Mismatch Warning */}
       <AnimatePresence>
         {showMismatchWarning && (
@@ -247,7 +259,7 @@ export default function Lyrics({ currentSong, currentTime, lyrics, loading, isRe
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="absolute bottom-32 right-12 z-50 flex items-center justify-end group h-14"
+          className="absolute bottom-16 right-12 z-50 flex items-center justify-end group h-14"
         >
           {/* Subtle Icon Trigger (Visible when NOT hovered) */}
           <div className="absolute right-0 flex items-center justify-center w-12 h-12 rounded-full bg-black/5 dark:bg-white/5 backdrop-blur-md border border-black/5 dark:border-white/5 opacity-40 group-hover:opacity-0 transition-opacity duration-300 pointer-events-none">

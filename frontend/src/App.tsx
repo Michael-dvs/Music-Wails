@@ -560,6 +560,7 @@ function MusicApp() {
                   audioDuration={audioDuration}
                   lrcDuration={lrcDuration}
                   bgColor={lyricsBgColor}
+                  onClose={() => setShowLyrics(false)}
                 />
               )}
             </AnimatePresence>

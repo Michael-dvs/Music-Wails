@@ -76,70 +76,56 @@ export default function PlayerBar({
   return (
     <div className="h-24 w-full glass-panel flex items-center px-6 justify-between z-20 relative flex-shrink-0">
       
-      {/* Live Stats indicator for stream status */}
-      <div className="absolute top-0 left-1/3 -mt-8 flex items-center space-x-2">
-        {streamLoading ? (
-          <motion.div 
-            initial={{ opacity: 0, y: 5 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="flex items-center space-x-2 bg-white/60 dark:bg-black/60 text-brand-300 text-xs px-3 py-1 rounded-full border border-black/10 dark:border-white/10 backdrop-blur-md"
-          >
-            <Loader2 className="w-3 h-3 animate-spin" />
-            <span>Fetching full stream...</span>
-          </motion.div>
-        ) : currentSong ? (
-          <motion.div 
-            initial={{ opacity: 0, y: 5 }}
-            animate={{ opacity: 1, y: 0 }}
-            className={`flex items-center space-x-2 text-xs px-3 py-1 rounded-full border backdrop-blur-md transition-colors ${
-              isHighQuality ? 'bg-red-500/20 text-red-400 border-red-500/30' : 'bg-white/60 dark:bg-black/60 text-gray-600 dark:text-gray-400 border-black/10 dark:border-white/10'
-            }`}
-          >
-            {isHighQuality ? (
-              <>
-                <Video className="w-3 h-3" />
-                <span>High Quality Stream</span>
-              </>
-            ) : (
-              <>
-                <Info className="w-3 h-3" />
-                <span>Standard Preview</span>
-              </>
-            )}
-          </motion.div>
-        ) : null}
-      </div>
-
       {/* Current Song Info */}
       <div className="flex items-center space-x-4 w-1/3">
         {currentSong ? (
-          <>
-            <div className="relative w-14 h-14 rounded-lg overflow-hidden shadow-lg">
-              <img src={currentSong.coverArt} alt="cover" className={`w-full h-full object-cover transition-opacity duration-300 ${streamLoading ? 'opacity-50' : 'opacity-100'}`} />
+          <div className="relative group">
+
+            {(isHighQuality || streamLoading) && (
+              <div className={`absolute -inset-1 bg-red-500/30 rounded-xl blur-md transition-opacity duration-500 
+                ${streamLoading ? 'animate-glow-pulse' : 'opacity-100'}`} 
+              />
+            )}
+
+
+            <div className="relative w-14 h-14 bg-[#1a1a1a] rounded-lg overflow-hidden border border-white/5 shadow-2xl">
+              
               {streamLoading && (
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <Loader2 className="w-6 h-6 text-black dark:text-white animate-spin" />
+                <div className="absolute inset-0 z-20 pointer-events-none">
+                  <div className="w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full animate-shimmer" />
                 </div>
               )}
-            </div>
-            <div className="min-w-0 flex-1 overflow-hidden">
-              <div className="flex items-center space-x-2">
-                <div className="running-text-container">
-                  <h4 className="text-black dark:text-white font-semibold text-sm running-text">{currentSong.title}</h4>
+
+              <img 
+                src={currentSong.coverArt} 
+                alt="cover" 
+                className={`w-full h-full object-cover transition-all duration-700 
+                  ${streamLoading ? 'scale-110 blur-[2px] opacity-50' : 'scale-100 blur-0 opacity-100'}`} 
+              />
+
+              {streamLoading && (
+                <div className="absolute inset-0 z-30 flex items-center justify-center">
+                  <div className="w-6 h-6 border-2 border-red-500/20 border-t-red-500 rounded-full animate-spin" />
                 </div>
-              </div>
-              <p className="text-gray-600 dark:text-gray-400 text-xs line-clamp-1">{currentSong.artist}</p>
-            </div>
-          </>
-        ) : (
-          <div className="flex items-center space-x-4 opacity-50">
-            <div className="w-14 h-14 bg-black/10 dark:bg-white/10 rounded-lg"></div>
-            <div>
-              <div className="h-4 w-24 bg-black/10 dark:bg-white/10 rounded mb-2"></div>
-              <div className="h-3 w-16 bg-black/10 dark:bg-white/10 rounded"></div>
+              )}
+
+
             </div>
           </div>
+        ) : (
+          /* Empty State / Skeleton */
+          <div className="w-14 h-14 bg-white/5 rounded-lg animate-pulse" />
         )}
+
+        {/* Song Details */}
+        <div className="flex flex-col overflow-hidden">
+          <span className="text-white text-sm font-semibold truncate hover:underline cursor-pointer transition-all">
+            {currentSong?.title || "Not Playing"}
+          </span>
+          <span className="text-gray-400 text-xs truncate">
+            {currentSong?.artist || "Unknown Artist"}
+          </span>
+        </div>
       </div>
 
       {/* Controls */}

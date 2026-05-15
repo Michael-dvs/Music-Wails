@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Settings2, Lock, Unlock, AlertTriangle, X, SearchCheck } from 'lucide-react';
 import { main } from '../../wailsjs/go/models';
 import { LyricLine } from '../App';
+import { GetTrackPulseDuration } from '../../wailsjs/go/main/App';
 
 interface LyricsProps {
   currentSong: main.Song | null;
@@ -41,6 +42,19 @@ export default function Lyrics({ currentSong, currentTime, lyrics, loading, isRe
 
   // Duration mismatch warning
   const [showMismatchWarning, setShowMismatchWarning] = useState(false);
+
+  // Dynamic background pulse based on Last.fm genre tags
+  const [pulseDuration, setPulseDuration] = useState<number>(4.0);
+
+  useEffect(() => {
+    if (currentSong) {
+      GetTrackPulseDuration(currentSong.artist, currentSong.title).then(duration => {
+        setPulseDuration(duration);
+      }).catch(() => {
+        setPulseDuration(4.0);
+      });
+    }
+  }, [currentSong]);
 
   useEffect(() => {
     if (currentSong) {
@@ -123,13 +137,10 @@ export default function Lyrics({ currentSong, currentTime, lyrics, loading, isRe
     >
       {/* Blurred album art overlay — ONLY here, not global app */}
       {currentSong && (
-        <motion.img
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 0.18 }}
-          exit={{ opacity: 0 }}
+        <img
           src={currentSong.coverArt}
           alt="bg"
-          className="absolute inset-0 w-full h-full object-cover blur-[80px] scale-110 pointer-events-none"
+          className="absolute inset-0 w-full h-full object-cover blur-[80px] pointer-events-none opacity-20"
         />
       )}
       {/* Dark vignette over art */}

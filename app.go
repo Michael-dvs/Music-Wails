@@ -1146,3 +1146,55 @@ func (a *App) GetLyrics(artist string, title string, durationSec int) LyricsResu
 	return empty
 }
 
+// GetTrackPulseDuration queries Last.fm for track tags to determine a simulated BPM,
+// then returns a CSS animation duration (in seconds) for a "pulse" effect synced to the genre.
+func (a *App) GetTrackPulseDuration(artist string, title string) float64 {
+	defaultDuration := 4.0 // Slow breathing default
+
+	client := newHTTPClient()
+	params := url.Values{}
+	params.Set("method", "track.getInfo")
+	params.Set("artist", artist)
+	params.Set("track", title)
+	params.Set("api_key", lastFMAPIKey)
+	params.Set("format", "json")
+
+	apiURL := lastFMBaseURL + "?" + params.Encode()
+
+	req, _ := http.NewRequest("GET", apiURL, nil)
+	resp, err := client.Do(req)
+	if err != nil {
+		return defaultDuration
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Track struct {
+			TopTags struct {
+				Tag []struct {
+					Name string `json:"name"`
+				} `json:"tag"`
+			} `json:"toptags"`
+		} `json:"track"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return defaultDuration
+	}
+
+	// Determine pulse based on tags
+	for _, tag := range result.Track.TopTags.Tag {
+		name := strings.ToLower(tag.Name)
+		switch {
+		case strings.Contains(name, "dance") || strings.Contains(name, "edm") || strings.Contains(name, "house") || strings.Contains(name, "techno") || strings.Contains(name, "electronic"):
+			return 1.8 // Fast pulse
+		case strings.Contains(name, "pop") || strings.Contains(name, "rock") || strings.Contains(name, "hip-hop") || strings.Contains(name, "rap") || strings.Contains(name, "rnb"):
+			return 2.5 // Medium pulse
+		case strings.Contains(name, "acoustic") || strings.Contains(name, "ballad") || strings.Contains(name, "chill") || strings.Contains(name, "ambient") || strings.Contains(name, "slow"):
+			return 5.0 // Slow pulse
+		}
+	}
+
+	return defaultDuration
+}
+

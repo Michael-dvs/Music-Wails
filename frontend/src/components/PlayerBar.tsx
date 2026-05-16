@@ -21,6 +21,10 @@ interface PlayerBarProps {
   setShowQueue: (s: boolean) => void;
   isSmartShuffleActive: boolean;
   queueLength: number;
+  volume: number;
+  setVolume: (v: number) => void;
+  isRepeat: boolean;
+  setIsRepeat: (r: boolean) => void;
 }
 
 export default function PlayerBar({ 
@@ -42,6 +46,10 @@ export default function PlayerBar({
   setShowQueue,
   isSmartShuffleActive,
   queueLength,
+  volume,
+  setVolume,
+  isRepeat,
+  setIsRepeat,
 }: PlayerBarProps) {
   
   const togglePlay = () => {
@@ -152,7 +160,10 @@ export default function PlayerBar({
           <button onClick={onNext} className="text-gray-600 dark:text-gray-400 hover:text-brand-600 dark:hover:text-brand-400 transition-colors hover:scale-110 active:scale-95">
             <SkipForward className="w-5 h-5 fill-current" />
           </button>
-          <button className="text-gray-600 dark:text-gray-400 hover:text-brand-600 dark:hover:text-brand-400 transition-colors hover:scale-110 active:scale-95">
+          <button 
+            onClick={() => setIsRepeat(!isRepeat)}
+            className={`transition-colors hover:scale-110 active:scale-95 ${isRepeat ? 'text-brand-600 dark:text-brand-400' : 'text-gray-600 dark:text-gray-400 hover:text-brand-600 dark:hover:text-brand-400'}`}
+          >
             <Repeat className="w-4 h-4" />
           </button>
         </div>
@@ -215,9 +226,11 @@ export default function PlayerBar({
           type="range" 
           min="0" 
           max="100" 
-          defaultValue="100"
+          value={volume * 100}
           onChange={(e) => {
-            if (audioRef.current) audioRef.current.volume = parseFloat(e.target.value) / 100;
+            const val = parseFloat(e.target.value) / 100;
+            setVolume(val);
+            if (audioRef.current) audioRef.current.volume = val;
           }}
           // FIX: accent-gray-600 di light mode (karena putih tidak akan terlihat), dan accent-white di dark mode
           className="w-24 h-1 bg-black/10 dark:bg-white/20 rounded-lg appearance-none cursor-pointer accent-gray-600 dark:accent-white" 

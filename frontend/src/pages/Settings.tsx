@@ -1,16 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
 import { supabase } from '../lib/supabase';
 import { Settings as SettingsIcon, Save, Moon, Sun, Key, Loader2, Info } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export default function Settings() {
   const { profile, refreshProfile } = useAuth();
-  const [theme, setTheme] = useState(() => {
-    const savedTheme = localStorage.getItem('theme');
-    if (savedTheme) return savedTheme;
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-  });
+  const { theme, toggleTheme } = useTheme();
   
   const [key1, setKey1] = useState(profile?.youtube_api_key_1 || '');
   const [key2, setKey2] = useState(profile?.youtube_api_key_2 || '');
@@ -23,17 +20,6 @@ export default function Settings() {
       setKey2(profile.youtube_api_key_2 || '');
     }
   }, [profile]);
-
-  const toggleTheme = () => {
-    const newTheme = theme === 'dark' ? 'light' : 'dark';
-    setTheme(newTheme);
-    localStorage.setItem('theme', newTheme);
-    if (newTheme === 'dark') {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-  };
 
   const saveKeys = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,11 +49,11 @@ export default function Settings() {
   };
 
   return (
-    <div className="w-full h-full p-8 overflow-y-auto text-black dark:text-white bg-white/5 dark:bg-black">
+    <div className="w-full h-full p-8 overflow-y-auto text-gray-900 dark:text-white bg-white dark:bg-[#121212]">
       <div className="max-w-2xl mx-auto space-y-12 pb-24">
         
         {/* Header */}
-        <div className="flex items-center space-x-4 border-b border-black/10 dark:border-white/10 pb-6">
+        <div className="flex items-center space-x-4 border-b border-gray-200 dark:border-white/10 pb-6">
           <div className="w-12 h-12 rounded-xl bg-brand-500/10 flex items-center justify-center">
             <SettingsIcon className="w-6 h-6 text-brand-500" />
           </div>
@@ -90,14 +76,14 @@ export default function Settings() {
                 Pilih antara mode terang (Light) atau gelap (Dark).
               </p>
             </div>
-            <button
-              onClick={toggleTheme}
-              className="px-6 py-2.5 rounded-full font-medium transition-all duration-200 
-                         bg-white text-black border border-gray-200 shadow-sm hover:scale-105 active:scale-95
-                         dark:bg-[#1c1c1e] dark:text-white dark:border-white/10 dark:hover:bg-white/10"
-            >
-              Ubah ke {theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
-            </button>
+              <button
+                onClick={toggleTheme}
+                className="px-5 py-2.5 rounded-lg font-medium transition-all duration-200 
+                  bg-gray-200 text-gray-900 hover:bg-gray-300 
+                  dark:bg-white/10 dark:text-white dark:hover:bg-white/20"
+              >
+                {theme === 'dark' ? 'Ubah ke Light Mode' : 'Ubah ke Dark Mode'}
+              </button>
           </div>
         </section>
 

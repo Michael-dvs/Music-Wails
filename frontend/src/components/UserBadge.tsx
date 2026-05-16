@@ -54,26 +54,26 @@ export default function UserBadge({ setActiveTab }: UserBadgeProps) {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 8, scale: 0.95 }}
               transition={{ duration: 0.15 }}
-              className="absolute bottom-full left-0 right-0 mb-2 z-50 bg-[#1c1c1e] border border-[#3a3a3c] rounded-xl shadow-2xl overflow-hidden"
+              className="absolute bottom-full left-0 right-0 mb-2 z-50 bg-white dark:bg-[#1c1c1e] border border-gray-200 dark:border-[#3a3a3c] rounded-xl shadow-2xl overflow-hidden"
             >
               {/* User info header */}
-              <div className="px-3 py-3 border-b border-[#2c2c2e]">
-                <p className="text-[13px] font-semibold text-white truncate">{displayName}</p>
+              <div className="px-3 py-3 border-b border-gray-200 dark:border-[#2c2c2e]">
+                <p className="text-[13px] font-semibold text-gray-900 dark:text-white truncate">{displayName}</p>
                 <p className="text-[11px] text-[var(--app-text-secondary)] truncate">{user.email}</p>
               </div>
 
               {/* Role badge */}
               {isAdmin && (
-                <div className="px-3 py-2 border-b border-[#2c2c2e] flex items-center space-x-2">
-                  <Shield className="w-3.5 h-3.5 text-brand-400" />
-                  <span className="text-[11px] text-brand-400 font-medium">Administrator</span>
+                <div className="px-3 py-2 border-b border-gray-200 dark:border-[#2c2c2e] flex items-center space-x-2">
+                  <Shield className="w-3.5 h-3.5 text-brand-500 dark:text-brand-400" />
+                  <span className="text-[11px] text-brand-600 dark:text-brand-400 font-medium">Administrator</span>
                 </div>
               )}
 
               {/* Actions */}
               <button
                 onClick={() => { setActiveTab('profile'); setShowMenu(false); }}
-                className="w-full flex items-center space-x-2.5 px-3 py-2.5 text-[13px] text-[var(--app-text-secondary)] hover:text-white hover:bg-white/5 transition-colors"
+                className="w-full flex items-center space-x-2.5 px-3 py-2.5 text-[13px] text-[var(--app-text-secondary)] hover:text-gray-900 hover:bg-black/5 dark:hover:text-white dark:hover:bg-white/5 transition-colors"
               >
                 <UserIcon className="w-4 h-4" />
                 <span>Profile</span>
@@ -81,7 +81,7 @@ export default function UserBadge({ setActiveTab }: UserBadgeProps) {
 
               <button
                 onClick={() => { setActiveTab('settings'); setShowMenu(false); }}
-                className="w-full flex items-center space-x-2.5 px-3 py-2.5 text-[13px] text-[var(--app-text-secondary)] hover:text-white hover:bg-white/5 transition-colors"
+                className="w-full flex items-center space-x-2.5 px-3 py-2.5 text-[13px] text-[var(--app-text-secondary)] hover:text-gray-900 hover:bg-black/5 dark:hover:text-white dark:hover:bg-white/5 transition-colors"
               >
                 <Settings className="w-4 h-4" />
                 <span>Settings</span>
@@ -89,7 +89,7 @@ export default function UserBadge({ setActiveTab }: UserBadgeProps) {
 
               <button
                 onClick={() => { setActiveTab('library'); setShowMenu(false); }}
-                className="w-full flex items-center space-x-2.5 px-3 py-2.5 text-[13px] text-[var(--app-text-secondary)] hover:text-white hover:bg-white/5 transition-colors border-b border-[#2c2c2e]"
+                className="w-full flex items-center space-x-2.5 px-3 py-2.5 text-[13px] text-[var(--app-text-secondary)] hover:text-gray-900 hover:bg-black/5 dark:hover:text-white dark:hover:bg-white/5 transition-colors border-b border-gray-200 dark:border-[#2c2c2e]"
               >
                 <Star className="w-4 h-4" />
                 <span>Favorit Saya</span>
@@ -110,7 +110,7 @@ export default function UserBadge({ setActiveTab }: UserBadgeProps) {
       {/* Trigger button */}
       <button
         onClick={() => setShowMenu(v => !v)}
-        className="w-full flex items-center space-x-2.5 px-2 py-2 rounded-xl hover:bg-white/5 transition-all duration-200 group"
+        className="w-full flex items-center space-x-2.5 px-2 py-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition-all duration-200 group"
       >
         {/* Avatar */}
         <div className="w-8 h-8 rounded-full bg-brand-500 flex items-center justify-center flex-shrink-0 text-[11px] font-bold text-white shadow-md shadow-brand-500/20 overflow-hidden">
@@ -122,9 +122,9 @@ export default function UserBadge({ setActiveTab }: UserBadgeProps) {
         </div>
         {/* Name */}
         <div className="flex-1 min-w-0 text-left">
-          <p className="text-[12px] font-semibold text-white truncate leading-tight">{displayName}</p>
+          <p className="text-[12px] font-semibold text-gray-900 dark:text-white truncate leading-tight">{displayName}</p>
           {isAdmin && (
-            <p className="text-[10px] text-brand-400">Admin</p>
+            <p className="text-[10px] text-brand-600 dark:text-brand-400">Admin</p>
           )}
         </div>
         <ChevronUp

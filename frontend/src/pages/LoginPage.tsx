@@ -262,7 +262,7 @@ export default function LoginPage() {
         </div>
 
         {/* ── Card ── */}
-        <div className="bg-[#1c1c1e] border border-[#2c2c2e] rounded-2xl p-5 shadow-2xl">
+        <div className="bg-white dark:bg-[#1c1c1e] border border-gray-200 dark:border-[#2c2c2e] rounded-2xl p-5 shadow-2xl">
 
           {/* Mode tabs */}
           <div className="flex bg-[#0c0c0c] rounded-xl p-1 mb-5 gap-1">
@@ -289,7 +289,7 @@ export default function LoginPage() {
               type="button"
               onClick={handleGoogleSignIn}
               disabled={isWorking || googleLoading}
-              className="w-full flex items-center justify-center space-x-2.5 py-2.5 rounded-xl bg-[#0c0c0c] border border-[#3a3a3c] hover:border-white/20 hover:bg-white/5 transition-all duration-200 text-[13px] font-medium text-white disabled:opacity-50"
+              className="w-full flex items-center justify-center space-x-2.5 py-2.5 rounded-xl bg-gray-100 dark:bg-[#0c0c0c] border border-gray-200 dark:border-[#3a3a3c] hover:border-black/10 hover:bg-black/5 dark:hover:border-white/20 dark:hover:bg-white/5 transition-all duration-200 text-[13px] font-medium text-gray-900 dark:text-white disabled:opacity-50"
             >
               {googleLoading ? (
                 <>

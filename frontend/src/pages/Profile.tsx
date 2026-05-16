@@ -166,10 +166,10 @@ export default function Profile() {
   };
 
   return (
-    <div className="w-full h-full flex flex-col text-black dark:text-white bg-white/5 dark:bg-black overflow-hidden">
+    <div className="w-full h-full flex flex-col text-gray-900 dark:text-white bg-white dark:bg-[#121212] overflow-hidden">
       
       {/* Header Profile Summary */}
-      <div className="w-full bg-gray-100 dark:bg-white/5 border-b border-black/5 dark:border-white/10 p-8 flex-shrink-0">
+      <div className="w-full bg-gray-50 dark:bg-[#1a1a1a] border-b border-gray-200 dark:border-white/10 p-8 flex-shrink-0">
         <div className="max-w-3xl mx-auto flex items-center space-x-6">
           <div className="relative group">
             <div className="w-24 h-24 rounded-full bg-brand-500/20 overflow-hidden flex items-center justify-center border-4 border-white dark:border-[#1c1c1e] shadow-lg">

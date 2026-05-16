@@ -2,60 +2,59 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── 1. VARIABEL GLOBAL (DI LUAR @layer AGAR TIDAK DIHAPUS COMPILER) ── */
+:root {
+  --app-bg: #f5f5f7;
+  --app-surface: #ffffff;
+  --app-divider: #e5e5ea;
+  --app-text: #1d1d1f;
+  --app-text-secondary: #86868b;
+  --app-accent: #FA243C;
+  --app-accent-glow: rgba(250, 36, 60, 0.25);
+}
+
+/* Menggunakan :root.dark agar 100% sinkron dengan script toggle <html> kamu */
+:root.dark {
+  --app-bg: #0c0c0c;
+  --app-surface: #1c1c1e;
+  --app-divider: #2c2c2e;
+  --app-text: #f5f5f7;
+  --app-text-secondary: #8e8e93;
+}
+
+/* ── 2. BASE STYLES ── */
 @layer base {
-  :root {
-    /* ── Apple Music Theme Tokens (Light Mode) ── */
-    --app-bg: #f5f5f7;          /* light background */
-    --app-surface: #ffffff;     /* elevated surface */
-    --app-divider: #e5e5ea;     /* separators */
-    --app-text: #1d1d1f;        /* primary text */
-    --app-text-secondary: #86868b; /* secondary text */
-    --app-accent: #FA243C;      /* Apple Music Red */
-    --app-accent-glow: rgba(250, 36, 60, 0.25);
-  }
-
-  @media (prefers-color-scheme: dark) {
-    :root {
-      /* ── Apple Music Theme Tokens (Dark Mode) ── */
-      --app-bg: #0c0c0c;          /* flat black */
-      --app-surface: #1c1c1e;     /* elevated surface */
-      --app-divider: #2c2c2e;     /* separators */
-      --app-text: #f5f5f7;        /* primary text */
-      --app-text-secondary: #8e8e93; /* secondary text */
-    }
-  }
-
   body {
     background-color: var(--app-bg);
     color: var(--app-text);
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
     overflow: hidden;
     user-select: none;
+    transition: background-color 0.3s ease, color 0.3s ease; /* Transisi halus saat ganti tema */
   }
 
-  /* Custom scrollbar */
+  /* Scrollbar - LIGHT MODE DEFAULT */
   ::-webkit-scrollbar { width: 4px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb {
-    background: rgba(128, 128, 128, 0.3);
+    background: rgba(0, 0, 0, 0.2);
     border-radius: 10px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: rgba(128, 128, 128, 0.5);
-  }
-
-  @media (prefers-color-scheme: dark) {
-    ::-webkit-scrollbar-thumb {
-      background: rgba(255,255,255,0.12);
-    }
-    ::-webkit-scrollbar-thumb:hover {
-      background: rgba(255,255,255,0.22);
-    }
+    background: rgba(0, 0, 0, 0.4);
   }
 }
 
+/* Scrollbar - DARK MODE CLASS (Di luar layer agar selalu terpanggil) */
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* ── 3. UTILITIES & GLASSMORPHISM ── */
 @layer utilities {
-  /* Apple Music-style glass panel: minimal blur */
   .glass {
     background: rgba(255, 255, 255, 0.85);
     backdrop-filter: blur(20px);
@@ -63,7 +62,7 @@
     border-right: 1px solid var(--app-divider);
     box-shadow: 1px 0 0 0 var(--app-divider);
   }
-  /* Player bar */
+  
   .glass-panel {
     background: rgba(245, 245, 245, 0.95);
     backdrop-filter: blur(30px);
@@ -71,16 +70,13 @@
     border-top: 1px solid var(--app-divider);
   }
 
-  @media (prefers-color-scheme: dark) {
-    .glass {
-      background: rgba(28, 28, 30, 0.85);
-    }
-    .glass-panel {
-      background: rgba(12, 12, 12, 0.95);
-    }
+  .dark .glass {
+    background: rgba(28, 28, 30, 0.85);
+  }
+  .dark .glass-panel {
+    background: rgba(12, 12, 12, 0.95);
   }
 
-  /* Marquee/Running text utility */
   .running-text-container {
     overflow: hidden;
     white-space: nowrap;
@@ -112,29 +108,17 @@
 
 /* Lyrics fade mask */
 .mask-linear-fade {
-  mask-image: linear-gradient(
-    to bottom,
-    transparent 0%,
-    black 12%,
-    black 88%,
-    transparent 100%
-  );
-  -webkit-mask-image: linear-gradient(
-    to bottom,
-    transparent 0%,
-    black 12%,
-    black 88%,
-    transparent 100%
-  );
+  mask-image: linear-gradient(to bottom, transparent 0%, black 12%, black 88%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 12%, black 88%, transparent 100%);
 }
 
-/* ── Offset/Range Slider — Apple Music Red ── */
+/* ── Offset/Range Slider ── */
 .offset-slider {
   -webkit-appearance: none;
   appearance: none;
   height: 3px;
   border-radius: 9999px;
-  background: rgba(250, 36, 60, 0.25);
+  background: var(--app-accent-glow);
   outline: none;
   transition: background 0.2s;
 }
@@ -144,7 +128,7 @@
   width: 13px;
   height: 13px;
   border-radius: 50%;
-  background: #FA243C;
+  background: var(--app-accent);
   cursor: pointer;
   box-shadow: 0 0 8px rgba(250, 36, 60, 0.5);
   transition: transform 0.15s, box-shadow 0.15s;
@@ -152,15 +136,6 @@
 .offset-slider::-webkit-slider-thumb:hover {
   transform: scale(1.2);
   box-shadow: 0 0 14px rgba(250, 36, 60, 0.7);
-}
-.offset-slider::-moz-range-thumb {
-  width: 13px;
-  height: 13px;
-  border-radius: 50%;
-  background: #FA243C;
-  cursor: pointer;
-  border: none;
-  box-shadow: 0 0 8px rgba(250, 36, 60, 0.5);
 }
 
 /* Horizontal scroll container */
@@ -177,24 +152,24 @@
   border-radius: 10px;
 }
 
-/* Animated placeholder */
-@keyframes placeholder-fade-in {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-@keyframes placeholder-fade-out {
-  from { opacity: 1; transform: translateY(0); }
-  to { opacity: 0; transform: translateY(-6px); }
-}
-.placeholder-enter { animation: placeholder-fade-in 0.4s ease-out forwards; }
-.placeholder-exit  { animation: placeholder-fade-out 0.3s ease-in forwards; }
-
-/* Shimmer loading skeleton */
+/* Shimmer loading skeleton - LIGHT MODE DEFAULT */
 @keyframes shimmer {
   0%   { background-position: -200% 0; }
   100% { background-position:  200% 0; }
 }
 .animate-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(0,0,0,0.04) 25%,
+    rgba(0,0,0,0.08) 50%,
+    rgba(0,0,0,0.04) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.8s infinite;
+}
+
+/* Shimmer loading skeleton - DARK MODE CLASS */
+.dark .animate-shimmer {
   background: linear-gradient(
     90deg,
     rgba(255,255,255,0.03) 25%,
@@ -203,28 +178,4 @@
   );
   background-size: 200% 100%;
   animation: shimmer 1.8s infinite;
-}
-
-/* Gradient card bg */
-.gradient-card-bg {
-  position: relative;
-  overflow: hidden;
-}
-.gradient-card-bg::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: inherit;
-  filter: blur(40px);
-  opacity: 0.3;
-  z-index: -1;
-}
-
-/* Duration mismatch warning */
-@keyframes mismatch-pulse {
-  0%, 100% { opacity: 0.8; }
-  50%       { opacity: 1; }
-}
-.mismatch-warning {
-  animation: mismatch-pulse 2s ease-in-out infinite;
 }

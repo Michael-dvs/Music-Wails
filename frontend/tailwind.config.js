@@ -14,7 +14,7 @@ export default {
           '200': '#ffc6cd',
           '300': '#ff9aa5',
           '400': '#ff5f6f',
-          '500': '#FA243C', /* Apple Music Red — primary accent */
+          '500': '#FA243C', /* Apple Music Red */
           '600': '#e0102a',
           '700': '#bc0a22',
           '800': '#9b0d1f',
@@ -22,8 +22,8 @@ export default {
           '950': '#47020d',
         },
         'apple-black': '#0c0c0c',
-        'apple-surface': '#1c1c1e',  /* iOS grouped bg */
-        'apple-divider': '#2c2c2e',  /* iOS separator */
+        'apple-surface': '#1c1c1e',
+        'apple-divider': '#2c2c2e',
       },
       fontFamily: {
         sans: ['Inter', 'ui-sans-serif', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif'],
@@ -33,6 +33,7 @@ export default {
         'fade-in': 'fadeIn 0.5s ease-out forwards',
         'slide-up': 'slideUp 0.5s ease-out forwards',
         'slide-in-right': 'slideInRight 0.4s ease-out forwards',
+        'glow-pulse': 'glowPulse 2s ease-in-out infinite', /* Tambahan baru */
       },
       keyframes: {
         fadeIn: {
@@ -47,6 +48,10 @@ export default {
           '0%': { opacity: '0', transform: 'translateX(30px)' },
           '100%': { opacity: '1', transform: 'translateX(0)' },
         },
+        glowPulse: { /* Tambahan baru */
+          '0%, 100%': { opacity: '0.6', transform: 'scale(1)' },
+          '50%': { opacity: '1', transform: 'scale(1.05)' },
+        }
       },
     },
   },

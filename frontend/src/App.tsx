@@ -11,6 +11,7 @@ import LoginPage from './pages/LoginPage';
 import Settings from './pages/Settings';
 import Profile from './pages/Profile';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { ThemeProvider } from './contexts/ThemeContext';
 
 import { main } from '../wailsjs/go/models';
 import { GetFullStreamURL, GetLyrics, BuildSmartQueue } from '../wailsjs/go/main/App';
@@ -103,9 +104,12 @@ function MusicApp() {
   const currentSongRef = useRef<AnyTrack | null>(null);
   const isGeneratingRef = useRef(false);
   const queuePanelRef = useRef<HTMLDivElement | null>(null); // for click-outside detection
+  // Stable ref so callbacks always read the LATEST profile (API keys) — fixes stale closure
+  const profileRef = useRef(profile);
 
   useEffect(() => { currentSongRef.current = currentSong; }, [currentSong]);
   useEffect(() => { isGeneratingRef.current = isGeneratingQueue; }, [isGeneratingQueue]);
+  useEffect(() => { profileRef.current = profile; }, [profile]);
 
   // ── Dragging logic for Sidebar ──
   useEffect(() => {
@@ -455,8 +459,10 @@ function MusicApp() {
 
     // Try YouTube high-quality stream first
     try {
-      const key1 = profile?.youtube_api_key_1 || '';
-      const key2 = profile?.youtube_api_key_2 || '';
+      // Read API keys from ref to always get the latest value (avoids stale closure)
+      const key1 = profileRef.current?.youtube_api_key_1 || '';
+      const key2 = profileRef.current?.youtube_api_key_2 || '';
+      console.log(`[YouTube] Attempting stream with key1=${key1 ? '✓ set' : '✗ empty'}, key2=${key2 ? '✓ set' : '✗ empty'}`);
       const ytURL = await GetFullStreamURL(song.artist, song.title, key1, key2);
       if (ytURL && ytURL.trim() !== '' && audioRef.current) {
         audioRef.current.src = ytURL;
@@ -643,8 +649,10 @@ function AuthGate() {
 // ──────────────────────────────────────────
 export default function App() {
   return (
-    <AuthProvider>
-      <AuthGate />
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <AuthGate />
+      </AuthProvider>
+    </ThemeProvider>
   );
 }

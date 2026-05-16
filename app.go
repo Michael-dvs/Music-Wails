@@ -316,16 +316,6 @@ func (a *App) UpdateHomeContent(token string, row HomeSettingRow) error {
 	return nil
 }
 
-// ─────────────────────────────────────────────────────────────
-//  GOOGLE OAUTH VIA EXTERNAL BROWSER
-//  Flow:
-//   1. Go opens system browser → Supabase OAuth URL
-//   2. Temporary HTTP server on :54321 waits for the callback
-//   3. Callback HTML reads tokens from URL fragment via JS
-//   4. JS POSTs tokens to /token → Go captures them
-//   5. Go emits Wails event "auth:google:success" to React
-//   6. React calls supabase.auth.setSession() → app unlocks
-// ─────────────────────────────────────────────────────────────
 
 const oauthCallbackPort = 54321
 
@@ -393,21 +383,121 @@ func (a *App) startOAuthCallbackServer() (<-chan oauthResult, func()) {
 <html lang="id">
 <head>
   <meta charset="UTF-8">
-  <title>Music-Wails — Login Google</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Music-Wails — Autentikasi</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
-    *{margin:0;padding:0;box-sizing:border-box}
-    body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display',sans-serif;
-         background:#0c0c0c;color:#fff;display:flex;align-items:center;
-         justify-content:center;height:100vh;flex-direction:column;gap:16px}
-    .icon{font-size:48px;margin-bottom:8px}
-    h2{font-size:20px;font-weight:600}
-    p{color:#8e8e93;font-size:14px;text-align:center;max-width:320px}
+    :root {
+      --bg-color: #0c0c0c;
+      --card-bg: #1c1c1e;
+      --text-main: #f5f5f7;
+      --text-muted: #8e8e93;
+      --accent: #FA243C; /* Apple Music Red */
+      --success: #34c759;
+    }
+    
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 24px;
+      padding: 40px 32px;
+      width: 100%;
+      max-width: 360px;
+      text-align: center;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+      animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    .icon-container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 64px;
+      margin-bottom: 24px;
+    }
+
+    /* Ikon SVG Styles */
+    svg { width: 48px; height: 48px; }
+    
+    .spinner {
+      stroke: var(--text-muted);
+      animation: spin 1s linear infinite;
+    }
+    
+    .success-icon {
+      stroke: var(--success);
+      animation: scaleIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      display: none;
+    }
+    
+    .error-icon {
+      stroke: var(--accent);
+      animation: scaleIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      display: none;
+    }
+
+    h2 {
+      font-size: 20px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      margin-bottom: 8px;
+    }
+
+    p {
+      color: var(--text-muted);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    /* Keyframes */
+    @keyframes spin { 100% { transform: rotate(360deg); } }
+    @keyframes slideUp {
+      0% { opacity: 0; transform: translateY(20px); }
+      100% { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes scaleIn {
+      0% { opacity: 0; transform: scale(0.5); }
+      100% { opacity: 1; transform: scale(1); }
+    }
   </style>
 </head>
 <body>
-  <div class="icon" id="icon">⏳</div>
-  <h2 id="title">Memproses login...</h2>
-  <p id="msg">Harap tunggu sebentar</p>
+
+  <div class="card">
+    <div class="icon-container" id="icon-wrapper">
+      <svg class="spinner" id="icon-loading" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 12a9 9 0 1 1-6.219-8.56"></path>
+      </svg>
+      <svg class="success-icon" id="icon-success" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+        <polyline points="22 4 12 14.01 9 11.01"></polyline>
+      </svg>
+      <svg class="error-icon" id="icon-error" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"></circle>
+        <line x1="15" y1="9" x2="9" y2="15"></line>
+        <line x1="9" y1="9" x2="15" y2="15"></line>
+      </svg>
+    </div>
+    
+    <h2 id="title">Mengautentikasi...</h2>
+    <p id="msg">Menghubungkan dengan aman ke akun Google Anda.</p>
+  </div>
+
   <script>
   (function() {
     var hashParams  = new URLSearchParams(window.location.hash.slice(1));
@@ -418,15 +508,25 @@ func (a *App) startOAuthCallbackServer() (<-chan oauthResult, func()) {
     var code         = queryParams.get('code');
     var err          = hashParams.get('error_description') || hashParams.get('error') ||
                        queryParams.get('error_description') || queryParams.get('error');
-    function showSuccess() {
-      document.getElementById('icon').textContent  = '✅';
-      document.getElementById('title').textContent = 'Login Berhasil!';
-      document.getElementById('msg').textContent   = 'Tab ini akan tertutup otomatis dalam 2 detik.';
-      setTimeout(function() { window.close(); }, 2000);
+
+    function hideAllIcons() {
+      document.getElementById('icon-loading').style.display = 'none';
+      document.getElementById('icon-success').style.display = 'none';
+      document.getElementById('icon-error').style.display = 'none';
     }
+
+    function showSuccess() {
+      hideAllIcons();
+      document.getElementById('icon-success').style.display = 'block';
+      document.getElementById('title').textContent = 'Autentikasi Berhasil';
+      document.getElementById('msg').textContent   = 'Anda sudah bisa kembali ke aplikasi. Tab ini akan tertutup otomatis.';
+      setTimeout(function() { window.close(); }, 3000);
+    }
+
     function showError(msg) {
-      document.getElementById('icon').textContent  = '❌';
-      document.getElementById('title').textContent = 'Login Gagal';
+      hideAllIcons();
+      document.getElementById('icon-error').style.display = 'block';
+      document.getElementById('title').textContent = 'Autentikasi Gagal';
       document.getElementById('msg').textContent   = msg;
     }
 
@@ -453,7 +553,7 @@ func (a *App) startOAuthCallbackServer() (<-chan oauthResult, func()) {
       }).catch(function(){});
 
     } else {
-      showError('Tidak ada data login. Silakan coba lagi.');
+      showError('Sesi tidak valid atau tidak ada data login. Silakan coba lagi.');
     }
   })();
   </script>
@@ -462,7 +562,6 @@ func (a *App) startOAuthCallbackServer() (<-chan oauthResult, func()) {
 
 	mux := http.NewServeMux()
 
-	// /callback — Supabase redirects here; page JS reads tokens from hash
 	mux.HandleFunc("/callback", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Header().Set("Access-Control-Allow-Origin", "*")

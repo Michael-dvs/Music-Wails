@@ -54,6 +54,7 @@ interface AuthActions {
   removeFavorite:   (itunesTrackId: string) => Promise<void>;
   isFavorited:      (itunesTrackId: string) => boolean;
   refreshFavorites: () => Promise<void>;
+  refreshProfile:   () => Promise<void>;
 }
 
 type AuthContextType = AuthState & AuthActions;
@@ -248,6 +249,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isAdmin: profile?.role === 'admin',
     signIn, signUp, signInWithGoogle, signOut,
     addFavorite, removeFavorite, isFavorited, refreshFavorites,
+    refreshProfile: useCallback(async () => {
+      if (session?.user?.id) await fetchProfile(session.user.id);
+    }, [session, fetchProfile]),
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

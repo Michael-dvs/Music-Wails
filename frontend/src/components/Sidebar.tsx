@@ -66,8 +66,8 @@ export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
       </nav>
 
       {/* User Badge — bottom of sidebar */}
-      <div className="mt-auto pt-4 border-t border-[var(--app-divider)]">
-        <UserBadge />
+      <div className="mt-auto pt-4 border-t border-[var(--app-divider)] border-white/10 dark:border-white/5">
+        <UserBadge setActiveTab={setActiveTab} />
       </div>
     </div>
   );

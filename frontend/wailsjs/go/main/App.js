@@ -18,8 +18,8 @@ export function GetFavorites(arg1) {
   return window['go']['main']['App']['GetFavorites'](arg1);
 }
 
-export function GetFullStreamURL(arg1, arg2) {
-  return window['go']['main']['App']['GetFullStreamURL'](arg1, arg2);
+export function GetFullStreamURL(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['GetFullStreamURL'](arg1, arg2, arg3, arg4);
 }
 
 export function GetHomeSettings(arg1) {

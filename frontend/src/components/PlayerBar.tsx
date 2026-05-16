@@ -168,15 +168,31 @@ export default function PlayerBar({
           <span className="text-xs text-gray-600 dark:text-gray-400 w-8 text-right font-medium tabular-nums">
             {audioRef.current ? formatTime(audioRef.current.currentTime) : '0:00'}
           </span>
-          <input 
-            type="range" 
-            min="0" 
-            max="100" 
-            value={progress}
-            onChange={handleProgressChange}
-            disabled={streamLoading || !currentSong}
-            className="w-full h-1 bg-black/20 dark:bg-white/20 rounded-lg appearance-none cursor-pointer accent-brand-500 disabled:opacity-50" 
-          />
+          
+          {/* MODIFIED: Custom Progress Slider Container */}
+          <div className="relative w-full flex items-center h-3 group cursor-pointer">
+            
+            {/* 1. Track Latar Belakang (Abu-abu/Transparan) */}
+            <div className="absolute w-full h-1 bg-black/20 dark:bg-white/20 rounded-full pointer-events-none" />
+            
+            {/* 2. Track Yang Sudah Terlewati (Warna Merah Apple Music) */}
+            <div 
+              className="absolute h-1 bg-[#FA243C] rounded-full pointer-events-none" 
+              style={{ width: `${progress || 0}%` }} 
+            />
+            
+            {/* 3. Input Range Sebenarnya (Dibuat Transparan) */}
+            <input 
+              type="range" 
+              min="0" 
+              max="100" 
+              value={progress || 0}
+              onChange={handleProgressChange}
+              disabled={streamLoading || !currentSong}
+              className="absolute inset-0 w-full h-full appearance-none bg-transparent cursor-pointer accent-[#FA243C] disabled:opacity-50 m-0 z-10 outline-none border-none shadow-none" 
+            />
+          </div>
+
           <span className="text-xs text-gray-600 dark:text-gray-400 w-8 font-medium tabular-nums">
             {durationStr()}
           </span>

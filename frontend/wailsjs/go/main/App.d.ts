@@ -10,7 +10,7 @@ export function CheckAuthSession(arg1:string):Promise<main.AuthUserInfo>;
 
 export function GetFavorites(arg1:string):Promise<Array<main.FavoriteTrack>>;
 
-export function GetFullStreamURL(arg1:string,arg2:string):Promise<string>;
+export function GetFullStreamURL(arg1:string,arg2:string,arg3:string,arg4:string):Promise<string>;
 
 export function GetHomeSettings(arg1:string):Promise<Array<main.HomeSettingRow>>;
 

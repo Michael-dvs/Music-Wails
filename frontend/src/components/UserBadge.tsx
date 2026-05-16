@@ -1,15 +1,41 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LogOut, Star, ChevronUp, Shield, User as UserIcon, Settings } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../lib/supabase';
+import { UserProfile } from '../lib/supabase';
 
-export default function UserBadge() {
+interface UserBadgeProps {
+  setActiveTab: (tab: string) => void;
+}
+
+export default function UserBadge({ setActiveTab }: UserBadgeProps) {
   const { user, profile, isAdmin, signOut } = useAuth();
   const [showMenu, setShowMenu] = useState(false);
+  const [localProfile, setLocalProfile] = useState(profile);
+
+  useEffect(() => {
+    setLocalProfile(profile);
+  }, [profile]);
+
+  const fetchUserProfile = async () => {
+    if (!user) return;
+    const { data } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single();
+    if (data) setLocalProfile(data as UserProfile);
+  };
+
+  useEffect(() => {
+    window.addEventListener('profileUpdated', fetchUserProfile);
+    return () => window.removeEventListener('profileUpdated', fetchUserProfile);
+  }, [user]);
 
   if (!user) return null;
 
-  const displayName = profile?.username ?? user.email?.split('@')[0] ?? 'User';
+  const displayName = localProfile?.username ?? user.email?.split('@')[0] ?? 'User';
   const initials = displayName.slice(0, 2).toUpperCase();
 
   return (
@@ -46,7 +72,7 @@ export default function UserBadge() {
 
               {/* Actions */}
               <button
-                onClick={() => { setShowMenu(false); }}
+                onClick={() => { setActiveTab('profile'); setShowMenu(false); }}
                 className="w-full flex items-center space-x-2.5 px-3 py-2.5 text-[13px] text-[var(--app-text-secondary)] hover:text-white hover:bg-white/5 transition-colors"
               >
                 <UserIcon className="w-4 h-4" />
@@ -54,7 +80,7 @@ export default function UserBadge() {
               </button>
 
               <button
-                onClick={() => { setShowMenu(false); }}
+                onClick={() => { setActiveTab('settings'); setShowMenu(false); }}
                 className="w-full flex items-center space-x-2.5 px-3 py-2.5 text-[13px] text-[var(--app-text-secondary)] hover:text-white hover:bg-white/5 transition-colors"
               >
                 <Settings className="w-4 h-4" />
@@ -62,7 +88,7 @@ export default function UserBadge() {
               </button>
 
               <button
-                onClick={() => { setShowMenu(false); }}
+                onClick={() => { setActiveTab('library'); setShowMenu(false); }}
                 className="w-full flex items-center space-x-2.5 px-3 py-2.5 text-[13px] text-[var(--app-text-secondary)] hover:text-white hover:bg-white/5 transition-colors border-b border-[#2c2c2e]"
               >
                 <Star className="w-4 h-4" />
@@ -71,7 +97,7 @@ export default function UserBadge() {
 
               <button
                 onClick={() => { signOut(); setShowMenu(false); }}
-                className="w-full flex items-center space-x-2.5 px-3 py-2.5 text-[13px] text-red-400 hover:text-red-300 hover:bg-red-500/5 transition-colors"
+                className="w-full flex items-center space-x-2.5 px-3 py-2.5 text-[13px] text-[#FA243C] hover:text-red-400 hover:bg-red-500/5 transition-colors"
               >
                 <LogOut className="w-4 h-4" />
                 <span>Keluar</span>
@@ -87,8 +113,12 @@ export default function UserBadge() {
         className="w-full flex items-center space-x-2.5 px-2 py-2 rounded-xl hover:bg-white/5 transition-all duration-200 group"
       >
         {/* Avatar */}
-        <div className="w-8 h-8 rounded-full bg-brand-500 flex items-center justify-center flex-shrink-0 text-[11px] font-bold text-white shadow-md shadow-brand-500/20">
-          {initials}
+        <div className="w-8 h-8 rounded-full bg-brand-500 flex items-center justify-center flex-shrink-0 text-[11px] font-bold text-white shadow-md shadow-brand-500/20 overflow-hidden">
+          {localProfile?.avatar_url ? (
+            <img src={localProfile.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
+          ) : (
+            initials
+          )}
         </div>
         {/* Name */}
         <div className="flex-1 min-w-0 text-left">

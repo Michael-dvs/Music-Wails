@@ -8,6 +8,8 @@ import Search from './pages/Search';
 import Home from './pages/Home';
 import Lyrics from './pages/Lyrics';
 import LoginPage from './pages/LoginPage';
+import Settings from './pages/Settings';
+import Profile from './pages/Profile';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 
 import { main } from '../wailsjs/go/models';
@@ -61,6 +63,7 @@ function getPreviewURL(track: AnyTrack): string {
 //  App (authenticated music player)
 // ──────────────────────────────────────────
 function MusicApp() {
+  const { user, profile } = useAuth();
   const [activeTab, setActiveTab] = useState('home');
   const [sidebarWidth, setSidebarWidth] = useState(240);
   const [isDragging, setIsDragging] = useState(false);
@@ -452,7 +455,9 @@ function MusicApp() {
 
     // Try YouTube high-quality stream first
     try {
-      const ytURL = await GetFullStreamURL(song.artist, song.title);
+      const key1 = profile?.youtube_api_key_1 || '';
+      const key2 = profile?.youtube_api_key_2 || '';
+      const ytURL = await GetFullStreamURL(song.artist, song.title, key1, key2);
       if (ytURL && ytURL.trim() !== '' && audioRef.current) {
         audioRef.current.src = ytURL;
         audioRef.current.play()
@@ -533,12 +538,10 @@ function MusicApp() {
             {/* Main Content Tabs - Kept mounted underneath Lyrics to preserve state (e.g. Search results) */}
             <div className="w-full h-full" style={{ display: showLyrics ? 'none' : 'block' }}>
               <AnimatePresence mode="wait">
-                {activeTab === 'home' && (
-                  <Home key="home" onPlaySong={handlePlaySong} />
-                )}
-                {activeTab === 'search' && (
-                  <Search key="search" onPlaySong={handlePlaySong} />
-                )}
+                {activeTab === 'home' && <Home key="home" onPlaySong={handlePlaySong} />}
+                {activeTab === 'search' && <Search key="search" onPlaySong={handlePlaySong} />}
+                {activeTab === 'profile' && <Profile key="profile" />}
+                {activeTab === 'settings' && <Settings key="settings" />}
                 {(activeTab === 'library' || activeTab === 'playlists') && (
                   <div key="placeholder" className="w-full h-full flex items-center justify-center text-gray-600 dark:text-gray-400">
                     <h2 className="text-2xl font-semibold capitalize">{activeTab} — Coming Soon</h2>

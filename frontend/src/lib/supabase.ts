@@ -25,6 +25,8 @@ export interface UserProfile {
   username: string | null;
   avatar_url: string | null;
   role: 'user' | 'admin';
+  youtube_api_key_1: string | null;
+  youtube_api_key_2: string | null;
   created_at: string;
 }
 

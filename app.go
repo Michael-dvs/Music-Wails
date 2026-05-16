@@ -768,32 +768,47 @@ func (a *App) GetPlaylist(category string) ([]Song, error) {
 
 // GetFullStreamURL — searches YouTube (Official API v3) then extracts stream via kkdai
 // Returns ("", error) on failure so frontend can fall back to iTunes preview
-func (a *App) GetFullStreamURL(artist string, title string) (string, error) {
+func (a *App) GetFullStreamURL(artist string, title string, key1 string, key2 string) (string, error) {
 	query := fmt.Sprintf("%s %s audio", artist, title)
 
-	// Step 1: Search via Official YouTube Data API v3
-	ytService, err := google_youtube.NewService(context.Background(), option.WithAPIKey(youtubeAPIKey))
+	tryKey := func(key string) (string, error) {
+		if key == "" {
+			return "", fmt.Errorf("empty API key")
+		}
+		ytService, err := google_youtube.NewService(context.Background(), option.WithAPIKey(key))
+		if err != nil {
+			return "", err
+		}
+
+		call := ytService.Search.List([]string{"id"}).Q(query).Type("video").MaxResults(1)
+		response, err := call.Do()
+		if err != nil {
+			return "", err
+		}
+
+		if len(response.Items) == 0 {
+			return "", fmt.Errorf("no video found for: %s", query)
+		}
+
+		return response.Items[0].Id.VideoId, nil
+	}
+
+	var videoID string
+	var err error
+
+	// Step 1: Search via Official YouTube Data API v3 with Failover
+	videoID, err = tryKey(key1)
 	if err != nil {
-		fmt.Printf("[YouTube] Failed to create service: %v\n", err)
-		return "", err
+		fmt.Printf("[YouTube] Key 1 failed: %v\n", err)
+		
+		// Fallback to Key 2
+		videoID, err = tryKey(key2)
+		if err != nil {
+			fmt.Printf("[YouTube] Key 2 failed: %v\n", err)
+			return "", fmt.Errorf("QUOTA_EXCEEDED")
+		}
 	}
 
-	call := ytService.Search.List([]string{"id"}).
-		Q(query).
-		Type("video").
-		MaxResults(1)
-
-	response, err := call.Do()
-	if err != nil {
-		fmt.Printf("[YouTube] Search error: %v\n", err)
-		return "", err
-	}
-
-	if len(response.Items) == 0 {
-		return "", fmt.Errorf("no video found for: %s", query)
-	}
-
-	videoID := response.Items[0].Id.VideoId
 	fmt.Printf("[YouTube] Found video ID: %s for '%s'\n", videoID, query)
 
 	// Step 2: Extract audio stream via kkdai

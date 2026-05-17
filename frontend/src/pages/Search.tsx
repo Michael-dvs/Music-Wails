@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Search as SearchIcon, Play, Loader2, X, Clock, Sparkles } from 'lucide-react';
+import { Search as SearchIcon, Play, Loader2, X, Clock, Music2, User, Disc3 } from 'lucide-react';
 import { main } from '../../wailsjs/go/models';
 import { SearchSongs } from '../../wailsjs/go/main/App';
 import { motion, AnimatePresence } from 'framer-motion';
+import AlbumDetail, { getAvatarColor, getInitials, getHighResArtwork } from './AlbumDetail';
 
 const ANIMATED_PLACEHOLDERS = [
   'Cari lagu Tulus...',
@@ -39,13 +40,39 @@ function removeFromHistory(query: string): string[] {
   return history;
 }
 
-export default function Search({ onPlaySong }: { onPlaySong: (song: main.Song, queue: main.Song[], source: 'playlist' | 'search') => void }) {
+// ── iTunes Artist type ──────────────────────────────────────────────
+interface ItunesArtist {
+  artistId: number;
+  artistName: string;
+  primaryGenreName?: string;
+  artistLinkUrl?: string;
+}
+
+export default function Search({
+  onPlaySong,
+  onNavigateToArtist,
+}: {
+  onPlaySong: (song: main.Song, queue: main.Song[], source: 'playlist' | 'search') => void;
+  onNavigateToArtist?: (artistId: number, artistName: string, genre?: string) => void;
+}) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<main.Song[]>([]);
+  const [artists, setArtists] = useState<ItunesArtist[]>([]);
+  const [albums, setAlbums] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingAlbums, setLoadingAlbums] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
   const [history, setHistory] = useState<string[]>(getSearchHistory());
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Local state to navigate to album detail within search tab
+  const [selectedAlbum, setSelectedAlbum] = useState<any | null>(null);
+
+  const handleArtistClick = useCallback((artist: ItunesArtist) => {
+    if (onNavigateToArtist) {
+      onNavigateToArtist(artist.artistId, artist.artistName, artist.primaryGenreName);
+    }
+  }, [onNavigateToArtist]);
 
   // Animated placeholder
   const [placeholderIdx, setPlaceholderIdx] = useState(0);
@@ -62,16 +89,29 @@ export default function Search({ onPlaySong }: { onPlaySong: (song: main.Song, q
     return () => clearInterval(interval);
   }, []);
 
-  // Debounced search
+  // Debounced unified search — tracks (YouTube) + artists (iTunes) + albums (iTunes) concurrently
   useEffect(() => {
     const timer = setTimeout(async () => {
       if (query.trim().length > 2) {
         setLoading(true);
+        setLoadingAlbums(true);
         try {
-          const songs = await SearchSongs(query);
+          const [songs, artistRes, albumRes] = await Promise.all([
+            SearchSongs(query).catch(() => []),
+            fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=musicArtist&limit=5&country=id`)
+              .then(r => r.json())
+              .then(d => (d.results ?? []) as ItunesArtist[])
+              .catch(() => [] as ItunesArtist[]),
+            fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=album&limit=10&country=id`)
+              .then(r => r.json())
+              .then(d => d.results ?? [])
+              .catch(() => []),
+          ]);
           setResults(songs || []);
+          setArtists(artistRes);
+          setAlbums(albumRes);
           // Save to history on successful search
-          if (songs && songs.length > 0) {
+          if ((songs && songs.length > 0) || artistRes.length > 0 || albumRes.length > 0) {
             saveSearchHistory(query.trim());
             setHistory(getSearchHistory());
           }
@@ -79,9 +119,12 @@ export default function Search({ onPlaySong }: { onPlaySong: (song: main.Song, q
           console.error(e);
         } finally {
           setLoading(false);
+          setLoadingAlbums(false);
         }
       } else if (query.trim().length === 0) {
         setResults([]);
+        setArtists([]);
+        setAlbums([]);
       }
     }, 500);
 
@@ -98,6 +141,19 @@ export default function Search({ onPlaySong }: { onPlaySong: (song: main.Song, q
     setHistory(updated);
   }, []);
 
+  if (selectedAlbum) {
+    return (
+      <AnimatePresence mode="wait">
+        <AlbumDetail
+          album={selectedAlbum}
+          onBack={() => setSelectedAlbum(null)}
+          onPlaySong={onPlaySong}
+          onNavigateToArtist={onNavigateToArtist}
+        />
+      </AnimatePresence>
+    );
+  }
+
   const showPlaceholder = !isFocused && query.length === 0;
 
   return (
@@ -105,7 +161,7 @@ export default function Search({ onPlaySong }: { onPlaySong: (song: main.Song, q
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -20 }}
-      className="w-full h-full flex flex-col p-8 space-y-6 overflow-y-auto pb-32"
+      className="w-full h-full flex flex-col p-8 space-y-6 overflow-y-auto pb-32 no-scrollbar"
     >
       {/* Search Bar with Animated Placeholder */}
       <div className="relative max-w-2xl w-full">
@@ -197,12 +253,124 @@ export default function Search({ onPlaySong }: { onPlaySong: (song: main.Song, q
       </AnimatePresence>
 
       {/* Results */}
-      <div className="flex-1">
+      <div className="flex-1 flex flex-col space-y-8">
+        {/* ── Artists Section ─────────────────────────────────── */}
+        <AnimatePresence>
+          {artists.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+            >
+              <h2 className="text-xl font-bold text-black dark:text-white mb-4 flex items-center space-x-2">
+                <User className="w-5 h-5 text-brand-400" />
+                <span>Artists</span>
+              </h2>
+              <div className="flex space-x-6 overflow-x-auto pb-3 no-scrollbar">
+                {artists.map((artist, idx) => {
+                  const gradient = getAvatarColor(artist.artistName);
+                  const initials = getInitials(artist.artistName);
+                  return (
+                    <motion.button
+                      key={artist.artistId}
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ delay: idx * 0.05 }}
+                      onClick={() => handleArtistClick(artist)}
+                      // Wrapper is plain flex-col — NO rounded-full here (that caused the square-ring bug)
+                      className="flex flex-col items-center space-y-2.5 flex-shrink-0 group cursor-pointer focus:outline-none"
+                    >
+                      {/* Ring lives on the w-20 circle itself, not the button wrapper */}
+                      <div
+                        className={`w-20 h-20 rounded-full bg-gradient-to-br ${gradient}
+                          flex items-center justify-center shadow-md select-none
+                          group-hover:scale-110 group-hover:shadow-xl transition-all duration-300
+                          group-focus-visible:ring-2 group-focus-visible:ring-brand-500
+                          group-focus-visible:ring-offset-2 group-focus-visible:ring-offset-[var(--app-bg)]`}
+                      >
+                        <span className="text-xl font-black text-white/90 leading-none tracking-tight">
+                          {initials}
+                        </span>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-sm font-semibold text-gray-900 dark:text-white group-hover:text-brand-500 dark:group-hover:text-brand-400 transition-colors max-w-[84px] truncate">
+                          {artist.artistName}
+                        </p>
+                        {artist.primaryGenreName && (
+                          <p className="text-[10px] text-gray-500 mt-0.5">{artist.primaryGenreName}</p>
+                        )}
+                      </div>
+                    </motion.button>
+                  );
+                })}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* ── Albums Section ─────────────────────────────────── */}
+        <AnimatePresence>
+          {albums.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="flex flex-col space-y-4"
+            >
+              <h2 className="text-xl font-bold text-black dark:text-white mb-2 flex items-center space-x-2">
+                <Disc3 className="w-5 h-5 text-brand-400" />
+                <span>Albums</span>
+              </h2>
+              <div className="flex space-x-4 overflow-x-auto pb-3 no-scrollbar">
+                {albums.map((album, idx) => {
+                  const coverArt = getHighResArtwork(album.artworkUrl100);
+                  const year = album.releaseDate ? album.releaseDate.slice(0, 4) : '';
+                  return (
+                    <motion.div
+                      key={album.collectionId}
+                      initial={{ opacity: 0, scale: 0.92 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ delay: idx * 0.03, duration: 0.3 }}
+                      onClick={() => setSelectedAlbum(album)}
+                      className="w-40 flex-shrink-0 flex flex-col cursor-pointer group focus:outline-none"
+                    >
+                      <div className="relative w-40 h-40 rounded-xl overflow-hidden shadow-md border border-black/5 dark:border-white/5 group-hover:scale-[1.02] transition-all duration-300">
+                        <img
+                          src={coverArt}
+                          alt={album.collectionName}
+                          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                        />
+                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                          <div className="w-10 h-10 bg-brand-500 rounded-full flex items-center justify-center shadow-xl">
+                            <Play className="w-5 h-5 text-white fill-white ml-0.5" />
+                          </div>
+                        </div>
+                      </div>
+                      <div className="mt-2 px-0.5 min-w-0">
+                        <p className="text-sm font-semibold text-gray-900 dark:text-white truncate group-hover:text-brand-500 dark:group-hover:text-brand-400 transition-colors">
+                          {album.collectionName}
+                        </p>
+                        <p className="text-xs text-gray-500 truncate mt-0.5">
+                          {album.artistName}
+                        </p>
+                        <p className="text-xs text-gray-400 mt-0.5">
+                          {year}
+                        </p>
+                      </div>
+                    </motion.div>
+                  );
+                })}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* ── Songs Section ────────────────────────────────────── */}
         {results.length > 0 ? (
           <div>
             <h2 className="text-xl font-bold text-black dark:text-white mb-6 flex items-center space-x-2">
-              <Sparkles className="w-5 h-5 text-brand-400" />
-              <span>Top Results</span>
+              <Music2 className="w-5 h-5 text-brand-400" />
+              <span>Songs</span>
               <span className="text-sm font-normal text-gray-500 ml-2">({results.length})</span>
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -236,7 +404,7 @@ export default function Search({ onPlaySong }: { onPlaySong: (song: main.Song, q
             </div>
           </div>
         ) : (
-          query.length > 2 && !loading && (
+          query.length > 2 && !loading && artists.length === 0 && (
             <motion.div 
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}

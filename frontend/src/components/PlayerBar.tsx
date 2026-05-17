@@ -25,6 +25,7 @@ interface PlayerBarProps {
   setVolume: (v: number) => void;
   isRepeat: boolean;
   setIsRepeat: (r: boolean) => void;
+  onNavigateToArtist?: (artistId: number, artistName: string, genre?: string) => void;
 }
 
 export default function PlayerBar({ 
@@ -50,6 +51,7 @@ export default function PlayerBar({
   setVolume,
   isRepeat,
   setIsRepeat,
+  onNavigateToArtist,
 }: PlayerBarProps) {
   
   const togglePlay = () => {
@@ -123,10 +125,38 @@ export default function PlayerBar({
           <span className="text-gray-900 dark:text-white text-sm font-semibold truncate hover:underline cursor-pointer transition-all">
             {currentSong?.title || "Not Playing"}
           </span>
-          {/* FIX: text-gray-500 di light mode agar lebih terbaca dibanding gray-400 */}
-          <span className="text-gray-500 dark:text-gray-400 text-xs truncate">
-            {currentSong?.artist || "Unknown Artist"}
-          </span>
+          {/* Artist name — clickable, resolves artistId via iTunes if needed */}
+          {onNavigateToArtist && currentSong?.artist ? (
+            <button
+              onClick={async () => {
+                const song = currentSong as any;
+                let artistId: number = song?.artistId ?? 0;
+                const artistName = currentSong.artist;
+
+                // If no iTunes artistId stored, do a quick lookup by name
+                if (!artistId) {
+                  try {
+                    const res = await fetch(
+                      `https://itunes.apple.com/search?term=${encodeURIComponent(artistName)}&entity=musicArtist&limit=1&country=id`
+                    );
+                    const data = await res.json();
+                    if (data.results?.[0]?.artistId) {
+                      artistId = data.results[0].artistId;
+                    }
+                  } catch (_) {}
+                }
+
+                onNavigateToArtist(artistId, artistName);
+              }}
+              className="text-gray-500 dark:text-gray-400 text-xs truncate text-left hover:text-brand-600 dark:hover:text-brand-400 hover:underline cursor-pointer transition-colors"
+            >
+              {currentSong.artist}
+            </button>
+          ) : (
+            <span className="text-gray-500 dark:text-gray-400 text-xs truncate">
+              {currentSong?.artist || "Unknown Artist"}
+            </span>
+          )}
         </div>
       </div>
 

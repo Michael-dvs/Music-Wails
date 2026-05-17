@@ -10,6 +10,7 @@ import Lyrics from './pages/Lyrics';
 import LoginPage from './pages/LoginPage';
 import Settings from './pages/Settings';
 import Profile from './pages/Profile';
+import ArtistDetail from './pages/ArtistDetail';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 
@@ -83,6 +84,9 @@ function MusicApp() {
   const [activeTab, setActiveTab] = useState('home');
   const [sidebarWidth, setSidebarWidth] = useState(240);
   const [isDragging, setIsDragging] = useState(false);
+
+  // Global artist page navigation — state lifted here for PlayerBar access
+  const [artistView, setArtistView] = useState<{ id: number; name: string; genre?: string } | null>(null);
 
   // Current playback
   const [currentSong, setCurrentSong] = useState<AnyTrack | null>(initialPersistedState.currentSong || null);
@@ -728,10 +732,16 @@ function MusicApp() {
     }
   }, [isShuffle, playSongCore, buildAndSetSmartQueue]);
 
-  // ── setActiveTab wrapper — always closes lyrics panel ──
+  // ── setActiveTab wrapper — always closes lyrics panel and artist view ──
   const handleSetActiveTab = useCallback((tab: string) => {
     setActiveTab(tab);
-    setShowLyrics(false); // Sidebar nav always exits lyrics
+    setShowLyrics(false);
+    setArtistView(null); // close artist page when switching tabs
+  }, []);
+
+  const navigateToArtist = useCallback((id: number, name: string, genre?: string) => {
+    setArtistView({ id, name, genre });
+    setShowLyrics(false);
   }, []);
 
   return (
@@ -764,14 +774,29 @@ function MusicApp() {
             {/* Main Content Tabs - Kept mounted underneath Lyrics to preserve state (e.g. Search results) */}
             <div className="w-full h-full" style={{ display: showLyrics ? 'none' : 'block' }}>
               <AnimatePresence mode="wait">
-                {activeTab === 'home' && <Home key="home" onPlaySong={handlePlaySong} />}
-                {activeTab === 'search' && <Search key="search" onPlaySong={handlePlaySong} />}
-                {activeTab === 'profile' && <Profile key="profile" />}
-                {activeTab === 'settings' && <Settings key="settings" />}
-                {(activeTab === 'library' || activeTab === 'playlists') && (
-                  <div key="placeholder" className="w-full h-full flex items-center justify-center text-gray-600 dark:text-gray-400">
-                    <h2 className="text-2xl font-semibold capitalize">{activeTab} — Coming Soon</h2>
-                  </div>
+                {/* Global Artist Detail overlay — appears on top of any tab */}
+                {artistView ? (
+                  <ArtistDetail
+                    key={`artist-${artistView.id}`}
+                    artistId={artistView.id}
+                    artistName={artistView.name}
+                    primaryGenre={artistView.genre}
+                    onBack={() => setArtistView(null)}
+                    onPlaySong={handlePlaySong}
+                    onNavigateToArtist={navigateToArtist}
+                  />
+                ) : (
+                  <>
+                    {activeTab === 'home' && <Home key="home" onPlaySong={handlePlaySong} />}
+                    {activeTab === 'search' && <Search key="search" onPlaySong={handlePlaySong} onNavigateToArtist={navigateToArtist} />}
+                    {activeTab === 'profile' && <Profile key="profile" />}
+                    {activeTab === 'settings' && <Settings key="settings" />}
+                    {(activeTab === 'library' || activeTab === 'playlists') && (
+                      <div key="placeholder" className="w-full h-full flex items-center justify-center text-gray-600 dark:text-gray-400">
+                        <h2 className="text-2xl font-semibold capitalize">{activeTab} — Coming Soon</h2>
+                      </div>
+                    )}
+                  </>
                 )}
               </AnimatePresence>
             </div>
@@ -832,6 +857,7 @@ function MusicApp() {
         setVolume={setVolume}
         isRepeat={isRepeat}
         setIsRepeat={setIsRepeat}
+        onNavigateToArtist={navigateToArtist}
       />
 
       <audio

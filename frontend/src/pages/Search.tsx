@@ -39,7 +39,7 @@ function removeFromHistory(query: string): string[] {
   return history;
 }
 
-export default function Search({ onPlaySong }: { onPlaySong: (song: main.Song, queue: main.Song[]) => void }) {
+export default function Search({ onPlaySong }: { onPlaySong: (song: main.Song, queue: main.Song[], source: 'playlist' | 'search') => void }) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<main.Song[]>([]);
   const [loading, setLoading] = useState(false);
@@ -212,7 +212,7 @@ export default function Search({ onPlaySong }: { onPlaySong: (song: main.Song, q
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: idx * 0.04, duration: 0.3 }}
                   key={song.id}
-                  onClick={() => onPlaySong(song, results)}
+                  onClick={() => onPlaySong(song, [song], 'search')}
                   className="group flex items-center space-x-4 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 border border-transparent hover:border-black/10 dark:border-white/10 p-3 rounded-xl cursor-pointer transition-all duration-300"
                 >
                   <div className="relative w-16 h-16 flex-shrink-0">

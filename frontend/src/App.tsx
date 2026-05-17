@@ -102,6 +102,10 @@ function MusicApp() {
   const [isGeneratingQueue, setIsGeneratingQueue] = useState(false);
   const [volume, setVolume] = useState<number>(initialPersistedState.volume ?? 1.0);
   const [isRepeat, setIsRepeat] = useState<boolean>(initialPersistedState.isRepeat || false);
+  // History of played song IDs — persisted so duplicates are avoided across restarts
+  const [playedHistory, setPlayedHistory] = useState<string[]>(initialPersistedState.playedHistory || []);
+  const playedHistoryRef = useRef<string[]>(initialPersistedState.playedHistory || []);
+  useEffect(() => { playedHistoryRef.current = playedHistory; }, [playedHistory]);
 
   // Stable ref so callbacks always see the latest queue
   const queueRef = useRef<AnyTrack[]>([]);
@@ -116,9 +120,10 @@ function MusicApp() {
       isShuffle,
       volume,
       isRepeat,
+      playedHistory,
     };
     localStorage.setItem('music_player_state', JSON.stringify(stateToSave));
-  }, [currentSong, queue, originalQueue, isShuffle, volume, isRepeat]);
+  }, [currentSong, queue, originalQueue, isShuffle, volume, isRepeat, playedHistory]);
 
   // UI panels
   const [showLyrics, setShowLyrics] = useState(false);
@@ -292,7 +297,7 @@ function MusicApp() {
   }, []);
 
   // ──────────────────────────────────────────
-  //  Smart Queue builder (called immediately on play & recursively)
+  //  Smart Queue builder — with Fisher-Yates variety + deduplication filter
   // ──────────────────────────────────────────
   const buildAndSetSmartQueue = useCallback(async (seed: AnyTrack, appendToQueue: AnyTrack[] = []) => {
     if (isGeneratingRef.current) return;
@@ -302,17 +307,49 @@ function MusicApp() {
 
     try {
       const genre = (seed as any).genre ?? '';
-      const recommendations = await BuildSmartQueue(seed.artist, seed.title, genre, seed.id);
+      const rawResults = await BuildSmartQueue(seed.artist, seed.title, genre, seed.id);
 
-      if (recommendations && recommendations.length > 0) {
-        console.log(`[SmartShuffle] ${recommendations.length} tracks received`);
-        setIsSmartShuffleActive(true);
-        // If appendToQueue is provided, append to it; otherwise start fresh with seed + recs
-        const newQueue: AnyTrack[] = appendToQueue.length > 0
-          ? [...appendToQueue, ...recommendations]
-          : [seed, ...recommendations];  // seed is the currently-playing song
-        setQueue(newQueue);
-        queueRef.current = newQueue;
+      if (rawResults && rawResults.length > 0) {
+        console.log(`[SmartShuffle] ${rawResults.length} raw tracks received`);
+
+        // Step 1: Fisher-Yates shuffle on the full raw result for variety
+        const shuffled = [...rawResults];
+        for (let i = shuffled.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        }
+
+        // Step 2: Deduplication — remove IDs already in history or current queue
+        const currentQueueIds = new Set(queueRef.current.map(s => s.id));
+        const historyIds = new Set(playedHistoryRef.current);
+        const deduplicated = shuffled.filter(
+          s => !historyIds.has(s.id) && !currentQueueIds.has(s.id)
+        );
+
+        // Step 3: Take only 5-7 clean tracks
+        const fresh = deduplicated.slice(0, 7);
+        console.log(`[SmartShuffle] ${fresh.length} fresh tracks after dedup (history: ${historyIds.size}, queue: ${currentQueueIds.size})`);
+
+        if (fresh.length > 0) {
+          setIsSmartShuffleActive(true);
+          const newQueue: AnyTrack[] = appendToQueue.length > 0
+            ? [...appendToQueue, ...fresh]
+            : [seed, ...fresh];
+          setQueue(newQueue);
+          queueRef.current = newQueue;
+        } else {
+          console.warn('[SmartShuffle] All recommendations were duplicates — clearing history and retrying batch');
+          // Safety net: if everything was filtered out, clear history and use the shuffled pool
+          setPlayedHistory([]);
+          playedHistoryRef.current = [];
+          const fallback = shuffled.slice(0, 7);
+          setIsSmartShuffleActive(true);
+          const newQueue: AnyTrack[] = appendToQueue.length > 0
+            ? [...appendToQueue, ...fallback]
+            : [seed, ...fallback];
+          setQueue(newQueue);
+          queueRef.current = newQueue;
+        }
       } else {
         console.warn('[SmartShuffle] No recommendations returned');
       }
@@ -507,6 +544,15 @@ function MusicApp() {
     const song = currentSongRef.current;
     const q = queueRef.current;
     if (!q.length || !song) return;
+
+    // Record the song that's ending into history
+    if (song.id) {
+      setPlayedHistory(prev => {
+        const updated = prev.includes(song.id) ? prev : [...prev, song.id];
+        playedHistoryRef.current = updated;
+        return updated;
+      });
+    }
     
     const curIdx = q.findIndex(s => s.id === song.id);
     const nextIdx = curIdx + 1;
@@ -518,15 +564,26 @@ function MusicApp() {
       setIsGeneratingQueue(true);
       try {
         const genre = (song as any).genre ?? '';
-        const recommendations = await BuildSmartQueue(song.artist, song.title, genre, song.id);
+        const rawResults = await BuildSmartQueue(song.artist, song.title, genre, song.id);
 
-        if (recommendations && recommendations.length > 0) {
+        if (rawResults && rawResults.length > 0) {
+          // Fisher-Yates shuffle for variety
+          const shuffled = [...rawResults];
+          for (let i = shuffled.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+          }
+          // Deduplication filter
+          const currentQueueIds = new Set(q.map(s => s.id));
+          const historyIds = new Set(playedHistoryRef.current);
+          const fresh = shuffled.filter(s => !historyIds.has(s.id) && !currentQueueIds.has(s.id)).slice(0, 7);
+          const batch = fresh.length > 0 ? fresh : shuffled.slice(0, 7);
+
           setIsSmartShuffleActive(true);
-          const newQueue = [...q, ...recommendations];
+          const newQueue = [...q, ...batch];
           setQueue(newQueue);
           queueRef.current = newQueue;
-          
-          playSongCore(recommendations[0], newQueue);
+          playSongCore(batch[0], newQueue);
         } else {
           // Fallback loop back jika tidak ada rekomendasi
           playSongCore(q[0], q);
@@ -549,7 +606,7 @@ function MusicApp() {
     playSongCore(q[prev], q);
   }, [playSongCore]);
 
-  // ── Song end handler: advance queue + recursive Smart Shuffle trigger ──
+  // ── Song end handler: advance queue + Smart Shuffle trigger ──
   const handleSongEnd = useCallback(async () => {
     if (isRepeat) {
       if (audioRef.current) {
@@ -563,6 +620,15 @@ function MusicApp() {
     const q = queueRef.current;
     if (!song) return;
 
+    // Record the song that just finished
+    if (song.id) {
+      setPlayedHistory(prev => {
+        const updated = prev.includes(song.id) ? prev : [...prev, song.id];
+        playedHistoryRef.current = updated;
+        return updated;
+      });
+    }
+
     const curIdx = q.findIndex(s => s.id === song.id);
     const nextIdx = curIdx + 1;
 
@@ -574,15 +640,26 @@ function MusicApp() {
       setIsGeneratingQueue(true);
       try {
         const genre = (song as any).genre ?? '';
-        const recommendations = await BuildSmartQueue(song.artist, song.title, genre, song.id);
+        const rawResults = await BuildSmartQueue(song.artist, song.title, genre, song.id);
 
-        if (recommendations && recommendations.length > 0) {
+        if (rawResults && rawResults.length > 0) {
+          // Fisher-Yates shuffle for variety
+          const shuffled = [...rawResults];
+          for (let i = shuffled.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+          }
+          // Deduplication filter
+          const currentQueueIds = new Set(q.map(s => s.id));
+          const historyIds = new Set(playedHistoryRef.current);
+          const fresh = shuffled.filter(s => !historyIds.has(s.id) && !currentQueueIds.has(s.id)).slice(0, 7);
+          const batch = fresh.length > 0 ? fresh : shuffled.slice(0, 7);
+
           setIsSmartShuffleActive(true);
-          const newQueue = [...q, ...recommendations];
+          const newQueue = [...q, ...batch];
           setQueue(newQueue);
           queueRef.current = newQueue;
-          
-          playSongCore(recommendations[0], newQueue);
+          playSongCore(batch[0], newQueue);
         } else {
           // Fallback loop back jika tidak ada rekomendasi
           playSongCore(q[0], q);
@@ -611,34 +688,45 @@ function MusicApp() {
   }, [playSongCore, buildAndSetSmartQueue]);
 
   // ──────────────────────────────────────────
-  //  Handlers for Home/Search pages
-  //  These call playSong which handles queue clearing + Smart Shuffle trigger
+  //  Context-Aware Playback Initializer
+  //  source='playlist' → preserve queue, no immediate Smart Shuffle
+  //  source='search'   → seed song only, immediately fetch recommendations
   // ──────────────────────────────────────────
-  const handlePlaySong = useCallback((song: main.Song, sourceQueue: main.Song[]) => {
-    // Pertahankan konteks playlist
+  const handlePlaySong = useCallback((song: main.Song, sourceQueue: main.Song[], source: 'playlist' | 'search' = 'playlist') => {
     setIsSmartShuffleActive(false);
-    const baseQueue = sourceQueue && sourceQueue.length > 0 ? sourceQueue : [song];
-    setOriginalQueue(baseQueue as AnyTrack[]);
 
-    if (isShuffle) {
-      // Filter sisa lagu (keluarkan lagu yang dipilih) agar tidak duplikat
-      const remaining = baseQueue.filter(s => s.id !== song.id);
-      
-      // Fisher-Yates Shuffle pada sisa lagu
-      const shuffledRemaining = [...remaining];
-      for (let i = shuffledRemaining.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [shuffledRemaining[i], shuffledRemaining[j]] = [shuffledRemaining[j], shuffledRemaining[i]];
-      }
-      
-      // Gabungkan: Lagu yang diklik di depan, diikuti sisa yang sudah dikocok
-      const newQueue = [song, ...shuffledRemaining];
-      playSongCore(song as AnyTrack, newQueue as AnyTrack[]);
+    if (source === 'search') {
+      // ── SEARCH CONTEXT ──
+      // Start with only this song, then immediately fetch recommendations
+      const soloQueue: AnyTrack[] = [song as AnyTrack];
+      setOriginalQueue(soloQueue);
+      playSongCore(song as AnyTrack, soloQueue);
+      // Trigger Smart Shuffle immediately so queue fills up right away
+      buildAndSetSmartQueue(song as AnyTrack, soloQueue);
     } else {
-      // Jika shuffle mati, gunakan urutan asli
-      playSongCore(song as AnyTrack, baseQueue as AnyTrack[]);
+      // ── PLAYLIST CONTEXT ──
+      // Preserve full playlist. Smart Shuffle only fires at end of queue.
+      const baseQueue = sourceQueue && sourceQueue.length > 0 ? sourceQueue as AnyTrack[] : [song as AnyTrack];
+      setOriginalQueue(baseQueue);
+
+      if (isShuffle) {
+        // Filter sisa lagu (keluarkan lagu yang dipilih) agar tidak duplikat
+        const remaining = baseQueue.filter(s => s.id !== song.id);
+        // Fisher-Yates Shuffle pada sisa lagu
+        const shuffledRemaining = [...remaining];
+        for (let i = shuffledRemaining.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [shuffledRemaining[i], shuffledRemaining[j]] = [shuffledRemaining[j], shuffledRemaining[i]];
+        }
+        // Gabungkan: Lagu yang diklik di depan (indeks 0), diikuti sisa yang sudah dikocok
+        const newQueue = [song as AnyTrack, ...shuffledRemaining];
+        playSongCore(song as AnyTrack, newQueue);
+      } else {
+        // Jika shuffle mati, gunakan urutan asli
+        playSongCore(song as AnyTrack, baseQueue);
+      }
     }
-  }, [isShuffle, playSongCore]);
+  }, [isShuffle, playSongCore, buildAndSetSmartQueue]);
 
   // ── setActiveTab wrapper — always closes lyrics panel ──
   const handleSetActiveTab = useCallback((tab: string) => {

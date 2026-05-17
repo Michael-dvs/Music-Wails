@@ -17,7 +17,7 @@ interface CategoryData {
   loaded: boolean;
 }
 
-export default function Home({ onPlaySong }: { onPlaySong: (song: main.Song, queue: main.Song[]) => void }) {
+export default function Home({ onPlaySong }: { onPlaySong: (song: main.Song, queue: main.Song[], source: 'playlist' | 'search') => void }) {
   const [categoryData, setCategoryData] = useState<Record<string, CategoryData>>({});
   const [heroLoading, setHeroLoading] = useState(true);
   const [selectedPlaylist, setSelectedPlaylist] = useState<string | null>(null);
@@ -92,7 +92,7 @@ export default function Home({ onPlaySong }: { onPlaySong: (song: main.Song, que
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.8 }}
             className="relative w-full h-full cursor-pointer group"
-            onClick={() => heroSongs.length > 0 && onPlaySong(heroSong, heroSongs)}
+            onClick={() => heroSongs.length > 0 && onPlaySong(heroSong, heroSongs, 'playlist')}
           >
             <img 
               src={heroSong.coverArt} 
@@ -129,7 +129,7 @@ export default function Home({ onPlaySong }: { onPlaySong: (song: main.Song, que
                   <button 
                     onClick={(e) => {
                       e.stopPropagation();
-                      onPlaySong(heroSong, heroSongs);
+                      onPlaySong(heroSong, heroSongs, 'playlist');
                     }}
                     // FIX: Teks dan ikon pada tombol merah HARUS selalu putih (text-white fill-white)
                     className="flex items-center space-x-2 bg-brand-500 hover:bg-brand-600 text-white px-6 py-2.5 rounded-full font-semibold shadow-lg shadow-brand-500/30 hover:shadow-brand-500/50 transition-all hover:scale-105 active:scale-95"
@@ -206,7 +206,7 @@ export default function Home({ onPlaySong }: { onPlaySong: (song: main.Song, que
                       idx={idx} 
                       large={isLarge} 
                       accentColor={cat.accentColor}
-                      onPlay={() => onPlaySong(song, songs)} 
+                      onPlay={() => onPlaySong(song, songs, 'playlist')} 
                     />
                   ))}
                 </div>

@@ -6,7 +6,7 @@ interface PlaylistDetailProps {
   songs: main.Song[];
   playlistName: string;
   playlistColor: string;
-  onPlaySong: (song: main.Song, queue: main.Song[]) => void;
+  onPlaySong: (song: main.Song, queue: main.Song[], source: 'playlist' | 'search') => void;
   onBack: () => void;
 }
 
@@ -81,7 +81,7 @@ export default function PlaylistDetail({ songs, playlistName, playlistColor, onP
             {songs.length} songs • ~{totalMinutes} min
           </p>
           <button
-            onClick={() => songs.length > 0 && onPlaySong(songs[0], songs)}
+            onClick={() => songs.length > 0 && onPlaySong(songs[0], songs, 'playlist')}
             className="mt-2 flex items-center space-x-2 bg-brand-500 hover:bg-brand-600 text-black dark:text-white px-6 py-2.5 rounded-full font-semibold shadow-lg shadow-brand-500/20 hover:shadow-brand-500/40 transition-all w-fit hover:scale-105 active:scale-95"
           >
             <Play className="w-5 h-5 fill-black dark:fill-white" />
@@ -110,7 +110,7 @@ export default function PlaylistDetail({ songs, playlistName, playlistColor, onP
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: idx * 0.03, duration: 0.25 }}
-              onClick={() => onPlaySong(song, songs)}
+              onClick={() => onPlaySong(song, songs, 'playlist')}
               className="group grid grid-cols-[40px_1fr_1fr_80px] gap-4 px-4 py-3 rounded-lg cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 transition-all duration-200 items-center"
             >
               {/* Track Number / Play icon */}

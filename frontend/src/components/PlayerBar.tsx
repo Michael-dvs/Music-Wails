@@ -1,6 +1,7 @@
 import { Play, Pause, SkipBack, SkipForward, Volume2, Repeat, Shuffle, Video, Loader2, Info, Mic2, Sparkles, ListMusic } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { main } from '../../wailsjs/go/models';
+import { fetchAPI } from '../lib/fetchAPI';
 
 interface PlayerBarProps {
   currentSong: main.Song | main.SmartTrack | null;
@@ -136,10 +137,9 @@ export default function PlayerBar({
                 // If no iTunes artistId stored, do a quick lookup by name
                 if (!artistId) {
                   try {
-                    const res = await fetch(
+                    const data = await fetchAPI<any>(
                       `https://itunes.apple.com/search?term=${encodeURIComponent(artistName)}&entity=musicArtist&limit=1&country=id`
                     );
-                    const data = await res.json();
                     if (data.results?.[0]?.artistId) {
                       artistId = data.results[0].artistId;
                     }

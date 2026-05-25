@@ -3,6 +3,7 @@ import { Search as SearchIcon, Play, Loader2, X, Clock, Music2, User, Disc3 } fr
 import { main } from '../../wailsjs/go/models';
 import { SearchSongs } from '../../wailsjs/go/main/App';
 import { motion, AnimatePresence } from 'framer-motion';
+import { fetchAPI } from '../lib/fetchAPI';
 import AlbumDetail, { getAvatarColor, getInitials, getHighResArtwork } from './AlbumDetail';
 
 const ANIMATED_PLACEHOLDERS = [
@@ -98,12 +99,10 @@ export default function Search({
         try {
           const [songs, artistRes, albumRes] = await Promise.all([
             SearchSongs(query).catch(() => []),
-            fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=musicArtist&limit=5&country=id`)
-              .then(r => r.json())
+            fetchAPI<any>(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=musicArtist&limit=5&country=id`)
               .then(d => (d.results ?? []) as ItunesArtist[])
               .catch(() => [] as ItunesArtist[]),
-            fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=album&limit=10&country=id`)
-              .then(r => r.json())
+            fetchAPI<any>(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=album&limit=10&country=id`)
               .then(d => d.results ?? [])
               .catch(() => []),
           ]);

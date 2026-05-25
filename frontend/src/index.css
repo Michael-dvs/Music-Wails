@@ -30,7 +30,14 @@
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
     overflow: hidden;
     user-select: none;
-    transition: background-color 0.3s ease, color 0.3s ease; /* Transisi halus saat ganti tema */
+  }
+
+  /* SMOOTH THEME TRANSITION ENGINE */
+  /* Mencegah lompatan visual yang kasar ketika berganti tema */
+  html, body, div, p, span, h1, h2, h3, h4, h5, h6, button, input, nav, aside, header, footer, a, svg, path {
+    transition-property: background-color, color, border-color, box-shadow, stroke, fill;
+    transition-duration: 400ms;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   /* Scrollbar - LIGHT MODE DEFAULT */

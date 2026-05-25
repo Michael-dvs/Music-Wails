@@ -4,9 +4,11 @@ import {main} from '../models';
 
 export function AddFavorite(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string,arg6:string,arg7:string):Promise<void>;
 
-export function BuildSmartQueue(arg1:string,arg2:string,arg3:string,arg4:string):Promise<Array<main.SmartTrack>>;
+export function BuildSmartQueue(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string):Promise<Array<main.SmartTrack>>;
 
 export function CheckAuthSession(arg1:string):Promise<main.AuthUserInfo>;
+
+export function FetchExternalAPI(arg1:string):Promise<string>;
 
 export function GetFavorites(arg1:string):Promise<Array<main.FavoriteTrack>>;
 

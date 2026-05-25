@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Play, Loader2, Clock, Music2 } from 'lucide-react';
 import { main } from '../../wailsjs/go/models';
+import { fetchAPI } from '../lib/fetchAPI';
 
 // ── iTunes types ──────────────────────────────────────────────────
 export interface ItunesTrack {
@@ -146,13 +147,8 @@ export default function AlbumDetail({ album, onBack, onPlaySong, onNavigateToArt
          */
         const url = `https://itunes.apple.com/lookup?id=${collectionId}&entity=song&limit=200&country=id`;
         console.log('[AlbumDetail] Fetching tracklist. collectionId:', collectionId, '| url:', url);
-        const res = await fetch(url);
-
-        if (!res.ok) {
-          throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-        }
-
-        const data = await res.json();
+        // fetchAPI routes through Go backend in production to bypass CORS
+        const data = await fetchAPI<any>(url);
         console.log('[AlbumDetail] resultCount:', data.resultCount, '| raw results:', data.results?.length);
 
         if (!data.results || !Array.isArray(data.results)) {

@@ -6,12 +6,16 @@ export function AddFavorite(arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
   return window['go']['main']['App']['AddFavorite'](arg1, arg2, arg3, arg4, arg5, arg6, arg7);
 }
 
-export function BuildSmartQueue(arg1, arg2, arg3, arg4) {
-  return window['go']['main']['App']['BuildSmartQueue'](arg1, arg2, arg3, arg4);
+export function BuildSmartQueue(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['App']['BuildSmartQueue'](arg1, arg2, arg3, arg4, arg5);
 }
 
 export function CheckAuthSession(arg1) {
   return window['go']['main']['App']['CheckAuthSession'](arg1);
+}
+
+export function FetchExternalAPI(arg1) {
+  return window['go']['main']['App']['FetchExternalAPI'](arg1);
 }
 
 export function GetFavorites(arg1) {

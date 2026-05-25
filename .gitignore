@@ -10,3 +10,5 @@ frontend/dist
 .env.local
 frontend/.env
 frontend/.env.local
+gemini.md
+claude.md

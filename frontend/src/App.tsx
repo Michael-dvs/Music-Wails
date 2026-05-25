@@ -302,8 +302,9 @@ function MusicApp() {
 
   // ──────────────────────────────────────────
   //  Smart Queue builder — with Fisher-Yates variety + deduplication filter
+  //  knownQueue: the queue snapshot at call time (avoids stale queueRef reads during async state flush)
   // ──────────────────────────────────────────
-  const buildAndSetSmartQueue = useCallback(async (seed: AnyTrack, appendToQueue: AnyTrack[] = []) => {
+  const buildAndSetSmartQueue = useCallback(async (seed: AnyTrack, knownQueue: AnyTrack[]) => {
     if (isGeneratingRef.current) return;
     isGeneratingRef.current = true;
     setIsGeneratingQueue(true);
@@ -311,7 +312,9 @@ function MusicApp() {
 
     try {
       const genre = (seed as any).genre ?? '';
-      const rawResults = await BuildSmartQueue(seed.artist, seed.title, genre, seed.id);
+      // Pass full history to backend so it excludes both current song AND recent history at the Go level
+      const historyJSON = JSON.stringify(playedHistoryRef.current);
+      const rawResults = await BuildSmartQueue(seed.artist, seed.title, genre, seed.id, historyJSON);
 
       if (rawResults && rawResults.length > 0) {
         console.log(`[SmartShuffle] ${rawResults.length} raw tracks received`);
@@ -323,33 +326,37 @@ function MusicApp() {
           [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
         }
 
-        // Step 2: Deduplication — remove IDs already in history or current queue
-        const currentQueueIds = new Set(queueRef.current.map(s => s.id));
+        // Step 2: Deduplication — use explicit knownQueue (not stale queueRef) + history + current seed
+        const knownQueueIds = new Set(knownQueue.map(s => s.id));
         const historyIds = new Set(playedHistoryRef.current);
         const deduplicated = shuffled.filter(
-          s => !historyIds.has(s.id) && !currentQueueIds.has(s.id)
+          s => s.id !== seed.id               // never include the seed itself
+            && !historyIds.has(s.id)          // never include recently played
+            && !knownQueueIds.has(s.id)       // never include what's already queued
         );
 
         // Step 3: Take only 5-7 clean tracks
         const fresh = deduplicated.slice(0, 7);
-        console.log(`[SmartShuffle] ${fresh.length} fresh tracks after dedup (history: ${historyIds.size}, queue: ${currentQueueIds.size})`);
+        console.log(`[SmartShuffle] ${fresh.length} fresh tracks after dedup (history: ${historyIds.size}, knownQueue: ${knownQueueIds.size})`);
 
         if (fresh.length > 0) {
           setIsSmartShuffleActive(true);
-          const newQueue: AnyTrack[] = appendToQueue.length > 0
-            ? [...appendToQueue, ...fresh]
+          // Build queue: seed first (if not already in knownQueue at index 0), then recommendations
+          const newQueue: AnyTrack[] = knownQueue.length > 0
+            ? [...knownQueue, ...fresh]
             : [seed, ...fresh];
           setQueue(newQueue);
           queueRef.current = newQueue;
         } else {
           console.warn('[SmartShuffle] All recommendations were duplicates — clearing history and retrying batch');
           // Safety net: if everything was filtered out, clear history and use the shuffled pool
+          // (but still exclude the seed/current song)
           setPlayedHistory([]);
           playedHistoryRef.current = [];
-          const fallback = shuffled.slice(0, 7);
+          const fallback = shuffled.filter(s => s.id !== seed.id).slice(0, 7);
           setIsSmartShuffleActive(true);
-          const newQueue: AnyTrack[] = appendToQueue.length > 0
-            ? [...appendToQueue, ...fallback]
+          const newQueue: AnyTrack[] = knownQueue.length > 0
+            ? [...knownQueue, ...fallback]
             : [seed, ...fallback];
           setQueue(newQueue);
           queueRef.current = newQueue;
@@ -564,11 +571,13 @@ function MusicApp() {
     if (nextIdx < q.length) {
       playSongCore(q[nextIdx], q);
     } else if (curIdx === q.length - 1) {
+      // End of queue — fetch Smart Shuffle recommendations
       console.log("[SmartShuffle] Manual Next at end of queue. Fetching recommendations.");
       setIsGeneratingQueue(true);
       try {
         const genre = (song as any).genre ?? '';
-        const rawResults = await BuildSmartQueue(song.artist, song.title, genre, song.id);
+        const historyJSON = JSON.stringify(playedHistoryRef.current);
+        const rawResults = await BuildSmartQueue(song.artist, song.title, genre, song.id, historyJSON);
 
         if (rawResults && rawResults.length > 0) {
           // Fisher-Yates shuffle for variety
@@ -577,11 +586,16 @@ function MusicApp() {
             const j = Math.floor(Math.random() * (i + 1));
             [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
           }
-          // Deduplication filter
+          // Deduplication filter — use q snapshot to avoid stale ref race
           const currentQueueIds = new Set(q.map(s => s.id));
           const historyIds = new Set(playedHistoryRef.current);
-          const fresh = shuffled.filter(s => !historyIds.has(s.id) && !currentQueueIds.has(s.id)).slice(0, 7);
-          const batch = fresh.length > 0 ? fresh : shuffled.slice(0, 7);
+          const fresh = shuffled.filter(
+            s => s.id !== song.id && !historyIds.has(s.id) && !currentQueueIds.has(s.id)
+          ).slice(0, 7);
+          // Fallback: if all deduped, use shuffled but still exclude current song
+          const batch = fresh.length > 0
+            ? fresh
+            : shuffled.filter(s => s.id !== song.id).slice(0, 7);
 
           setIsSmartShuffleActive(true);
           const newQueue = [...q, ...batch];
@@ -644,7 +658,8 @@ function MusicApp() {
       setIsGeneratingQueue(true);
       try {
         const genre = (song as any).genre ?? '';
-        const rawResults = await BuildSmartQueue(song.artist, song.title, genre, song.id);
+        const historyJSON = JSON.stringify(playedHistoryRef.current);
+        const rawResults = await BuildSmartQueue(song.artist, song.title, genre, song.id, historyJSON);
 
         if (rawResults && rawResults.length > 0) {
           // Fisher-Yates shuffle for variety
@@ -653,11 +668,16 @@ function MusicApp() {
             const j = Math.floor(Math.random() * (i + 1));
             [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
           }
-          // Deduplication filter
+          // Deduplication filter — use q snapshot to avoid stale ref race
           const currentQueueIds = new Set(q.map(s => s.id));
           const historyIds = new Set(playedHistoryRef.current);
-          const fresh = shuffled.filter(s => !historyIds.has(s.id) && !currentQueueIds.has(s.id)).slice(0, 7);
-          const batch = fresh.length > 0 ? fresh : shuffled.slice(0, 7);
+          const fresh = shuffled.filter(
+            s => s.id !== song.id && !historyIds.has(s.id) && !currentQueueIds.has(s.id)
+          ).slice(0, 7);
+          // Fallback: if all deduped, use shuffled but still exclude current song
+          const batch = fresh.length > 0
+            ? fresh
+            : shuffled.filter(s => s.id !== song.id).slice(0, 7);
 
           setIsSmartShuffleActive(true);
           const newQueue = [...q, ...batch];
@@ -685,9 +705,11 @@ function MusicApp() {
     // Clear old queue, set only this song so panel shows correctly while loading
     setIsSmartShuffleActive(false);
     const soloQueue: AnyTrack[] = [song];
+    // Sync queueRef immediately so buildAndSetSmartQueue sees the correct knownQueue
+    queueRef.current = soloQueue;
     await playSongCore(song, soloQueue);
 
-    // Immediately trigger Smart Shuffle — don't wait for song to end
+    // Immediately trigger Smart Shuffle — pass soloQueue explicitly (not queueRef which may lag)
     buildAndSetSmartQueue(song, soloQueue);
   }, [playSongCore, buildAndSetSmartQueue]);
 
@@ -701,11 +723,15 @@ function MusicApp() {
 
     if (source === 'search') {
       // ── SEARCH CONTEXT ──
-      // Start with only this song, then immediately fetch recommendations
+      // Reset: clear any leftover state from previous session so Smart Queue starts fresh
       const soloQueue: AnyTrack[] = [song as AnyTrack];
       setOriginalQueue(soloQueue);
+      // Sync queueRef immediately BEFORE calling buildAndSetSmartQueue
+      // This is critical: buildAndSetSmartQueue reads knownQueue from its parameter,
+      // but playSongCore also sets queueRef — doing this here ensures consistency.
+      queueRef.current = soloQueue;
       playSongCore(song as AnyTrack, soloQueue);
-      // Trigger Smart Shuffle immediately so queue fills up right away
+      // Pass soloQueue explicitly as knownQueue — not queueRef (which is async)
       buildAndSetSmartQueue(song as AnyTrack, soloQueue);
     } else {
       // ── PLAYLIST CONTEXT ──

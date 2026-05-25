@@ -67,23 +67,63 @@ export default function Settings() {
         <section className="space-y-6">
           <h2 className="text-xl font-semibold flex items-center space-x-2">
             {theme === 'dark' ? <Moon className="w-5 h-5 text-gray-400" /> : <Sun className="w-5 h-5 text-gray-400" />}
-            <span>Tampilan & Tema</span>
+            <span>Mode Tampilan</span>
           </h2>
-          <div className="bg-gray-100 dark:bg-white/5 border border-black/5 dark:border-white/10 rounded-2xl p-6 flex items-center justify-between shadow-sm">
+          <div className="bg-gray-100 dark:bg-white/5 border border-black/5 dark:border-white/10 rounded-2xl p-6 shadow-sm space-y-6">
             <div>
               <h3 className="font-medium text-lg">Mode Tampilan</h3>
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                Pilih antara mode terang (Light) atau gelap (Dark).
+                Pilih mode tampilan yang paling sesuai dan nyaman untuk Anda saat memutar musik.
               </p>
             </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              {/* Light Mode Selector Card */}
               <button
-                onClick={toggleTheme}
-                className="px-5 py-2.5 rounded-lg font-medium transition-all duration-200 
-                  bg-gray-200 text-gray-900 hover:bg-gray-300 
-                  dark:bg-white/10 dark:text-white dark:hover:bg-white/20"
+                type="button"
+                onClick={() => theme === 'dark' && toggleTheme()}
+                className={`flex flex-col items-center justify-center p-6 rounded-2xl border-2 text-center transition-all duration-300 focus:outline-none ${
+                  theme === 'light'
+                    ? 'border-brand-500 bg-white shadow-md shadow-brand-500/5'
+                    : 'border-transparent bg-white/5 hover:bg-white/10 text-gray-400 dark:text-gray-400'
+                }`}
               >
-                {theme === 'dark' ? 'Ubah ke Light Mode' : 'Ubah ke Dark Mode'}
+                <div className={`w-12 h-12 rounded-full flex items-center justify-center mb-3 transition-colors ${
+                  theme === 'light' ? 'bg-amber-100 text-amber-500' : 'bg-white/5 text-gray-400 dark:bg-white/5 dark:text-gray-400'
+                }`}>
+                  <Sun className="w-6 h-6 fill-amber-500/10" />
+                </div>
+                <span className={`font-semibold text-sm ${theme === 'light' ? 'text-gray-900' : 'text-gray-300 dark:text-gray-300'}`}>
+                  Light Mode
+                </span>
+                <span className={`text-[11px] mt-1 ${theme === 'light' ? 'text-gray-400' : 'text-gray-500 dark:text-gray-500'}`}>
+                  Bersih & Terang
+                </span>
               </button>
+
+              {/* Dark Mode Selector Card */}
+              <button
+                type="button"
+                onClick={() => theme === 'light' && toggleTheme()}
+                className={`flex flex-col items-center justify-center p-6 rounded-2xl border-2 text-center transition-all duration-300 focus:outline-none ${
+                  theme === 'dark'
+                    ? 'border-brand-500 bg-[#1c1c1e] shadow-md shadow-brand-500/5'
+                    : 'border-transparent bg-gray-200/50 hover:bg-gray-200/80 text-gray-500'
+                }`}
+              >
+                <div className={`w-12 h-12 rounded-full flex items-center justify-center mb-3 transition-colors ${
+                  theme === 'dark' ? 'bg-indigo-950 text-indigo-400' : 'bg-gray-300 text-gray-600'
+                }`}>
+                  <Moon className="w-6 h-6 fill-indigo-400/10" />
+                </div>
+                <span className={`font-semibold text-sm ${theme === 'dark' ? 'text-white' : 'text-gray-700'}`}>
+                  Dark Mode
+                </span>
+                <span className={`text-[11px] mt-1 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                  Tenang & Teduh
+                </span>
+              </button>
+            </div>
           </div>
         </section>
 

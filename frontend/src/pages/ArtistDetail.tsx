@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Play, Music2, Disc3, User, Loader2 } from 'lucide-react';
 import { main } from '../../wailsjs/go/models';
+import { fetchAPI } from '../lib/fetchAPI';
 import AlbumDetail from './AlbumDetail';
 import {
   getHighResArtwork,
@@ -102,8 +103,7 @@ export default function ArtistDetail({
         // country=id ensures Indonesian artists are found in local store
         const url = `https://itunes.apple.com/search?term=${encoded}&entity=musicArtist&limit=1&country=id`;
         console.log(`[ArtistDetail] Resolving artistId for "${artistName}" via:`, url);
-        const res = await fetch(url);
-        const data = await res.json();
+        const data = await fetchAPI<any>(url);
         const found = data.results?.[0];
         if (!cancelled) {
           if (found?.artistId) {
@@ -135,8 +135,7 @@ export default function ArtistDetail({
         // country=id: ensures Indonesian tracks are not region-blocked
         const url = `https://itunes.apple.com/lookup?id=${resolvedArtistId}&entity=song&limit=10&sort=popular&country=id`;
         console.log('[ArtistDetail] Fetching top tracks:', url);
-        const res = await fetch(url);
-        const data = await res.json();
+        const data = await fetchAPI<any>(url);
         if (!cancelled) {
           const tracks = (data.results ?? []).filter(
             (r: any) => r.wrapperType === 'track'
@@ -166,8 +165,7 @@ export default function ArtistDetail({
         // limit=150 + country=id: cast wider net and hit local storefront
         const url = `https://itunes.apple.com/lookup?id=${resolvedArtistId}&entity=album&limit=150&country=id`;
         console.log('[ArtistDetail] Fetching albums:', url);
-        const res = await fetch(url);
-        const data = await res.json();
+        const data = await fetchAPI<any>(url);
         if (!cancelled) {
           // Filter: only real album collections, no karaoke/tribute/video entries
           const raw = (data.results ?? []).filter(

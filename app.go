@@ -5,12 +5,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"math/rand"
 	"net/http"
 	"net/url"
 	"os"
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/kkdai/youtube/v2"
 	google_youtube "google.golang.org/api/youtube/v3"
@@ -707,6 +710,38 @@ func newHTTPClient() *http.Client {
 	return &http.Client{Timeout: 10 * time.Second}
 }
 
+// FetchExternalAPI is a production-safe HTTP proxy for the frontend.
+// Browser fetch() calls to external APIs (iTunes, etc.) fail in wails build
+// due to CORS / wails:// protocol restrictions. This Go method bypasses
+// that by running the request server-side, where there is no CORS policy.
+func (a *App) FetchExternalAPI(targetURL string) (string, error) {
+	client := &http.Client{Timeout: 15 * time.Second}
+	req, err := http.NewRequest("GET", targetURL, nil)
+	if err != nil {
+		return "", fmt.Errorf("FetchExternalAPI: build request: %w", err)
+	}
+	// Inject a real browser User-Agent so Apple CDN does not block the request
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+	req.Header.Set("Accept", "application/json, */*")
+	req.Header.Set("Accept-Language", "id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("FetchExternalAPI: do request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		return "", fmt.Errorf("FetchExternalAPI: HTTP %d for %s", resp.StatusCode, targetURL)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("FetchExternalAPI: read body: %w", err)
+	}
+	return string(body), nil
+}
+
 // upsizeArtwork converts iTunes 100x100 artwork URL to 600x600
 func upsizeArtwork(url100 string) string {
 	if len(url100) > 13 {
@@ -934,8 +969,88 @@ func (a *App) GetFullStreamURL(artist string, title string, key1 string, key2 st
 }
 
 // ─────────────────────────────────────────────
-//  SMART SHUFFLE — LAST.FM DISCOVERY
+//  SMART SHUFFLE — ARTIST SANITIZATION + LAST.FM DISCOVERY
 // ─────────────────────────────────────────────
+
+// diacriticMap maps common accented/special characters to their ASCII equivalents.
+// Using a manual map avoids adding golang.org/x/text as a dependency.
+var diacriticMap = map[rune]string{
+	// Latin Extended-A — most common in Indonesian/European names
+	'À': "A", 'Á': "A", 'Â': "A", 'Ã': "A", 'Ä': "A", 'Å': "A",
+	'à': "a", 'á': "a", 'â': "a", 'ã': "a", 'ä': "a", 'å': "a",
+	'Æ': "AE", 'æ': "ae",
+	'Ç': "C", 'ç': "c",
+	'È': "E", 'É': "E", 'Ê': "E", 'Ë': "E",
+	'è': "e", 'é': "e", 'ê': "e", 'ë': "e",
+	'Ì': "I", 'Í': "I", 'Î': "I", 'Ï': "I",
+	'ì': "i", 'í': "i", 'î': "i", 'ï': "i",
+	'Ñ': "N", 'ñ': "n",
+	'Ò': "O", 'Ó': "O", 'Ô': "O", 'Õ': "O", 'Ö': "O", 'Ø': "O",
+	'ò': "o", 'ó': "o", 'ô': "o", 'õ': "o", 'ö': "o", 'ø': "o",
+	'Ù': "U", 'Ú': "U", 'Û': "U", 'Ü': "U",
+	'ù': "u", 'ú': "u", 'û': "u", 'ü': "u",
+	'Ý': "Y", 'ý': "y", 'ÿ': "y",
+	'Ð': "D", 'ð': "d",
+	'Þ': "TH", 'þ': "th",
+	'ß': "ss",
+	// Latin Extended with caron/breve (Czech, Slovak, Croatian)
+	'Č': "C", 'č': "c", 'Š': "S", 'š': "s", 'Ž': "Z", 'ž': "z",
+	'Ć': "C", 'ć': "c", 'Đ': "D", 'đ': "d",
+	// Polish
+	'Ą': "A", 'ą': "a", 'Ę': "E", 'ę': "e", 'Ł': "L", 'ł': "l",
+	'Ń': "N", 'ń': "n", 'Ś': "S", 'ś': "s", 'Ź': "Z", 'ź': "z", 'Ż': "Z", 'ż': "z",
+	// Turkish
+	'Ğ': "G", 'ğ': "g", 'İ': "I", 'ı': "i",
+	// Misc punctuation used in artist names
+	'\u2019': "'", '\u2018': "'", // curly apostrophes
+	'\u2013': "-", '\u2014': "-", // em/en dash
+}
+
+// sanitizeArtistName performs two normalizations required for reliable API lookups:
+//  1. Diacritic stripping  — 'eńau' → 'enau', 'Ari Ólafsson' → 'Ari Olafsson'
+//  2. Multi-artist splitting — 'enau & Ari Lesmana' → 'enau'
+//     Splits on: ' & ', ' feat. ', ' ft. ', ' featuring ', ' x ', ' vs ', ','
+func sanitizeArtistName(artist string) string {
+	if artist == "" {
+		return ""
+	}
+
+	// Step 1: Extract primary artist by splitting on collaboration separators.
+	// Lower-case comparison so 'Feat.' and 'FEAT.' are both caught.
+	separators := []string{" & ", " feat. ", " ft. ", " featuring ", " x ", " vs. ", " vs ", ","}
+	primary := artist
+	lower := strings.ToLower(artist)
+	for _, sep := range separators {
+		if idx := strings.Index(strings.ToLower(lower), sep); idx != -1 {
+			candidate := strings.TrimSpace(artist[:idx])
+			if candidate != "" {
+				primary = candidate
+				break
+			}
+		}
+	}
+
+	// Step 2: Replace diacritic characters using our map.
+	var b strings.Builder
+	for _, r := range primary {
+		if repl, ok := diacriticMap[r]; ok {
+			b.WriteString(repl)
+		} else if r > unicode.MaxASCII {
+			// Drop any other non-ASCII character we don't have a mapping for.
+			// This is a safe fallback — better to lose a char than break the API call.
+			continue
+		} else {
+			b.WriteRune(r)
+		}
+	}
+
+	sanitized := strings.TrimSpace(b.String())
+	if sanitized == "" {
+		// Extreme edge case: if everything was stripped, return original primary
+		return strings.TrimSpace(primary)
+	}
+	return sanitized
+}
 
 // lastFMSimilarTrack is the raw shape returned by Last.fm track.getSimilar
 type lastFMSimilarTrack struct {
@@ -946,7 +1061,8 @@ type lastFMSimilarTrack struct {
 	Match float64 `json:"match"`
 }
 
-// getSimilarFromLastFM calls Last.fm track.getSimilar and returns raw track pairs
+// getSimilarFromLastFM calls Last.fm track.getSimilar and returns raw track pairs.
+// The artist string passed in should already be sanitized.
 func getSimilarFromLastFM(artist, title string, limit int) ([]lastFMSimilarTrack, error) {
 	client := newHTTPClient()
 
@@ -991,7 +1107,8 @@ func getSimilarFromLastFM(artist, title string, limit int) ([]lastFMSimilarTrack
 
 // enrichWithItunes cross-references Last.fm tracks against iTunes to get full metadata.
 // Returns enriched SmartTrack slice. Tracks that can't be found on iTunes are skipped.
-func enrichWithItunes(lastFMTracks []lastFMSimilarTrack, excludeID string) []SmartTrack {
+// excludeIDs is a set of track IDs that must never appear in the result (current song + history).
+func enrichWithItunes(lastFMTracks []lastFMSimilarTrack, excludeIDs map[string]bool) []SmartTrack {
 	client := newHTTPClient()
 	var enriched []SmartTrack
 	seen := make(map[string]bool) // dedup by artist+title
@@ -1007,7 +1124,9 @@ func enrichWithItunes(lastFMTracks []lastFMSimilarTrack, excludeID string) []Sma
 		}
 		seen[key] = true
 
-		query := fmt.Sprintf("%s %s", track.Artist.Name, track.Name)
+		// Use sanitized artist for iTunes search to handle diacritics from Last.fm results
+		sanitizedTrackArtist := sanitizeArtistName(track.Artist.Name)
+		query := fmt.Sprintf("%s %s", sanitizedTrackArtist, track.Name)
 		searchURL := fmt.Sprintf("https://itunes.apple.com/search?term=%s&entity=song&limit=3", url.QueryEscape(query))
 
 		resp, err := client.Get(searchURL)
@@ -1041,7 +1160,9 @@ func enrichWithItunes(lastFMTracks []lastFMSimilarTrack, excludeID string) []Sma
 		item := result.Results[0]
 		trackIDStr := fmt.Sprintf("%d", item.TrackID)
 
-		if trackIDStr == excludeID {
+		// De-duplication guard: skip if this track is in the exclusion set
+		if excludeIDs[trackIDStr] {
+			fmt.Printf("[SmartShuffle] Skipping excluded track ID %s (%s - %s)\n", trackIDStr, item.ArtistName, item.TrackName)
 			continue
 		}
 
@@ -1062,28 +1183,57 @@ func enrichWithItunes(lastFMTracks []lastFMSimilarTrack, excludeID string) []Sma
 	return enriched
 }
 
-// itunesFallbackTracks builds a SmartTrack queue from iTunes directly (no Last.fm)
-func itunesFallbackTracks(artist, genre, excludeID string) []SmartTrack {
+// itunesFallbackTracks builds a SmartTrack queue from iTunes when Last.fm fails or returns too few results.
+// Uses a 4-strategy cascade:
+//   1. Sanitized artist + genre combo query
+//   2. Sanitized artist-only query
+//   3. Genre-only query (no artist — most resilient for unknown/niche artists)
+//   4. Genre-based Indonesian regional chart (iTunes ID storefront)
+//
+// excludeIDs is a set of track IDs that must never appear in the result (current song + history).
+func itunesFallbackTracks(artist, genre string, excludeIDs map[string]bool) []SmartTrack {
 	client := newHTTPClient()
 	var tracks []SmartTrack
 	seen := make(map[string]bool)
+
+	// Sanitize artist BEFORE building any search query
+	sanitizedArtist := sanitizeArtistName(artist)
+	fmt.Printf("[SmartShuffle] Sanitized artist: '%s' → '%s'\n", artist, sanitizedArtist)
+
+	// Build the effective genre term — use genre if non-empty, else fall back to "pop"
+	effectiveGenre := genre
+	if strings.TrimSpace(effectiveGenre) == "" {
+		effectiveGenre = "pop"
+	}
 
 	queries := []struct {
 		term   string
 		source string
 	}{
-		{genre + " " + artist, "itunes_genre"},
-		{artist, "itunes_artist"},
+		// Strategy 1: sanitized artist + genre (highest precision)
+		{sanitizedArtist + " " + effectiveGenre, "itunes_genre"},
+		// Strategy 2: sanitized artist only
+		{sanitizedArtist, "itunes_artist"},
+		// Strategy 3: genre only — resilient for obscure/niche artists
+		{effectiveGenre, "itunes_genre_only"},
+		// Strategy 4: Indonesian regional genre (catches local music not in global top)
+		{effectiveGenre + " indonesia", "itunes_genre_id"},
 	}
 
 	for _, q := range queries {
 		if len(tracks) >= 10 {
 			break
 		}
+		// Skip artist-specific queries if sanitized artist is empty
+		if (q.source == "itunes_genre" || q.source == "itunes_artist") && sanitizedArtist == "" {
+			continue
+		}
 
+		fmt.Printf("[SmartShuffle] iTunes fallback strategy '%s': query='%s'\n", q.source, q.term)
 		searchURL := fmt.Sprintf("https://itunes.apple.com/search?term=%s&entity=song&limit=15", url.QueryEscape(q.term))
 		resp, err := client.Get(searchURL)
 		if err != nil {
+			fmt.Printf("[SmartShuffle] iTunes request error for '%s': %v\n", q.term, err)
 			continue
 		}
 
@@ -1110,9 +1260,9 @@ func itunesFallbackTracks(artist, genre, excludeID string) []SmartTrack {
 			if len(tracks) >= 10 {
 				break
 			}
-
 			trackIDStr := fmt.Sprintf("%d", item.TrackID)
-			if trackIDStr == excludeID || seen[trackIDStr] {
+			// De-duplication guard: skip if in exclusion set or already added
+			if excludeIDs[trackIDStr] || seen[trackIDStr] {
 				continue
 			}
 			seen[trackIDStr] = true
@@ -1135,28 +1285,150 @@ func itunesFallbackTracks(artist, genre, excludeID string) []SmartTrack {
 	return tracks
 }
 
-// BuildSmartQueue is the main coordinator called by the frontend.
-// It orchestrates: Last.fm → iTunes enrichment → iTunes fallback
-// Returns up to 10 SmartTracks with full metadata (YouTube is lazy-loaded by frontend).
-func (a *App) BuildSmartQueue(seedArtist, seedTitle, seedGenre, excludeID string) ([]SmartTrack, error) {
-	fmt.Printf("[SmartShuffle] Building queue — seed: '%s - %s' (genre: %s)\n", seedArtist, seedTitle, seedGenre)
+// itunesRSSHardFallback fetches the iTunes global Top 20 RSS feed and returns random tracks.
+// This is the LAST resort guard — it guarantees a non-empty result even when all
+// targeted strategies fail (e.g. completely unknown artist with no genre metadata).
+// The returned tracks are randomized so repeated calls don't produce the same order.
+func itunesRSSHardFallback(excludeIDs map[string]bool, limit int) []SmartTrack {
+	fmt.Printf("[SmartShuffle] Activating HARD FALLBACK — pulling from iTunes RSS Top 20 globally\n")
+	client := &http.Client{Timeout: 10 * time.Second}
 
-	// --- Strategy 1: Last.fm track.getSimilar → iTunes enrichment ---
-	lastFMTracks, err := getSimilarFromLastFM(seedArtist, seedTitle, 15)
-	if err == nil && len(lastFMTracks) > 0 {
-		enriched := enrichWithItunes(lastFMTracks, excludeID)
-		if len(enriched) >= 5 {
-			fmt.Printf("[SmartShuffle] Last.fm path: %d enriched tracks\n", len(enriched))
-			return enriched, nil
-		}
-		fmt.Printf("[SmartShuffle] Last.fm enrichment yielded only %d tracks, trying fallback\n", len(enriched))
-	} else {
-		fmt.Printf("[SmartShuffle] Last.fm failed (%v), using iTunes fallback\n", err)
+	// Use both a global and an Indonesian chart for variety
+	rssURLs := []string{
+		"https://rss.applemarketingtools.com/api/v2/us/music/most-played/20/songs.json",
+		"https://rss.applemarketingtools.com/api/v2/id/music/most-played/20/songs.json",
 	}
 
-	// --- Strategy 2: iTunes genre/artist fallback ---
-	fallback := itunesFallbackTracks(seedArtist, seedGenre, excludeID)
-	fmt.Printf("[SmartShuffle] iTunes fallback: %d tracks\n", len(fallback))
+	var pool []SmartTrack
+	seen := make(map[string]bool)
+
+	for _, rssURL := range rssURLs {
+		resp, err := client.Get(rssURL)
+		if err != nil {
+			fmt.Printf("[SmartShuffle] Hard fallback RSS error: %v\n", err)
+			continue
+		}
+
+		var feed struct {
+			Feed struct {
+				Results []struct {
+					ID          string `json:"id"`
+					Name        string `json:"name"`
+					ArtistName  string `json:"artistName"`
+					ArtworkURL  string `json:"artworkUrl100"`
+					GenreName   string `json:"genreName"`
+					URL         string `json:"url"`
+				} `json:"results"`
+			} `json:"feed"`
+		}
+
+		if err := json.NewDecoder(resp.Body).Decode(&feed); err != nil {
+			resp.Body.Close()
+			continue
+		}
+		resp.Body.Close()
+
+		for _, item := range feed.Feed.Results {
+			if excludeIDs[item.ID] || seen[item.ID] {
+				continue
+			}
+			seen[item.ID] = true
+			pool = append(pool, SmartTrack{
+				ID:       item.ID,
+				Title:    item.Name,
+				Artist:   item.ArtistName,
+				Genre:    item.GenreName,
+				CoverArt: upsizeArtwork(item.ArtworkURL),
+				Source:   "rss_fallback",
+				IsReady:  true,
+			})
+		}
+	}
+
+	if len(pool) == 0 {
+		return nil
+	}
+
+	// Fisher-Yates shuffle so the hard fallback feels varied
+	rand.Shuffle(len(pool), func(i, j int) { pool[i], pool[j] = pool[j], pool[i] })
+
+	if limit > len(pool) {
+		limit = len(pool)
+	}
+	fmt.Printf("[SmartShuffle] Hard fallback returning %d tracks from RSS pool of %d\n", limit, len(pool))
+	return pool[:limit]
+}
+
+// BuildSmartQueue is the main coordinator called by the frontend.
+// Orchestration order:
+//   1. Last.fm track.getSimilar (using SANITIZED artist) → iTunes enrichment
+//   2. iTunes fallback cascade (sanitized artist + genre, genre-only, ID regional)
+//   3. Hard fallback: iTunes RSS Top 20 global/ID — GUARANTEED non-empty result
+//
+// excludeID      — the currently playing song ID (always excluded)
+// historyIDsJSON — JSON-encoded []string of recently played song IDs (also always excluded)
+func (a *App) BuildSmartQueue(seedArtist, seedTitle, seedGenre, excludeID, historyIDsJSON string) ([]SmartTrack, error) {
+	fmt.Printf("[SmartShuffle] Building queue — seed: '%s - %s' (genre: %s, excludeID: %s)\n",
+		seedArtist, seedTitle, seedGenre, excludeID)
+
+	// ── Step A: Sanitize the seed artist before any API call ──
+	sanitizedArtist := sanitizeArtistName(seedArtist)
+	fmt.Printf("[SmartShuffle] Artist sanitized: '%s' → '%s'\n", seedArtist, sanitizedArtist)
+
+	// ── Step B: Build the unified exclusion set from current song + history ──
+	excludeSet := make(map[string]bool)
+	if excludeID != "" {
+		excludeSet[excludeID] = true
+	}
+	if historyIDsJSON != "" {
+		var historyIDs []string
+		if err := json.Unmarshal([]byte(historyIDsJSON), &historyIDs); err == nil {
+			for _, id := range historyIDs {
+				excludeSet[id] = true
+			}
+		} else {
+			fmt.Printf("[SmartShuffle] Warning: failed to parse historyIDsJSON: %v\n", err)
+		}
+	}
+	fmt.Printf("[SmartShuffle] Exclusion set size: %d IDs\n", len(excludeSet))
+
+	// ── Strategy 1: Last.fm (sanitized artist) → iTunes enrichment ──
+	lastFMTracks, lastFMErr := getSimilarFromLastFM(sanitizedArtist, seedTitle, 20)
+	if lastFMErr == nil && len(lastFMTracks) > 0 {
+		enriched := enrichWithItunes(lastFMTracks, excludeSet)
+		if len(enriched) >= 5 {
+			fmt.Printf("[SmartShuffle] Strategy 1 (Last.fm) success: %d enriched tracks\n", len(enriched))
+			return enriched, nil
+		}
+		fmt.Printf("[SmartShuffle] Strategy 1 (Last.fm) weak (%d tracks), continuing cascade\n", len(enriched))
+	} else {
+		fmt.Printf("[SmartShuffle] Strategy 1 (Last.fm) failed: %v\n", lastFMErr)
+	}
+
+	// ── Strategy 2: iTunes fallback cascade (sanitized artist + genre-only) ──
+	fallback := itunesFallbackTracks(sanitizedArtist, seedGenre, excludeSet)
+	if len(fallback) >= 3 {
+		fmt.Printf("[SmartShuffle] Strategy 2 (iTunes cascade) success: %d tracks\n", len(fallback))
+		return fallback, nil
+	}
+	fmt.Printf("[SmartShuffle] Strategy 2 (iTunes cascade) weak (%d tracks), activating hard fallback\n", len(fallback))
+
+	// ── Strategy 3: HARD FALLBACK GUARD — iTunes RSS Top 20 (global + ID) ──
+	// This path is only reached when the artist is completely unknown to both Last.fm and iTunes.
+	// The RSS feed always has fresh content so the result is guaranteed non-empty.
+	hardFallback := itunesRSSHardFallback(excludeSet, 7)
+	if len(hardFallback) > 0 {
+		// Merge any partial iTunes results we got in strategy 2 (put them first for relevance)
+		combined := append(fallback, hardFallback...)
+		if len(combined) > 10 {
+			combined = combined[:10]
+		}
+		fmt.Printf("[SmartShuffle] Strategy 3 (Hard RSS fallback): %d tracks total\n", len(combined))
+		return combined, nil
+	}
+
+	// Absolute last resort: return whatever we managed to collect (may be empty)
+	fmt.Printf("[SmartShuffle] All strategies exhausted. Returning %d partial tracks.\n", len(fallback))
 	return fallback, nil
 }
 

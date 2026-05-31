@@ -900,8 +900,10 @@ func (a *App) GetPlaylist(category string) ([]Song, error) {
 //  YOUTUBE STREAMING
 // ─────────────────────────────────────────────
 
-// GetFullStreamURL — searches YouTube (Official API v3) then extracts stream via kkdai
-// Returns ("", error) on failure so frontend can fall back to iTunes preview
+// GetFullStreamURL — searches YouTube (Official API v3) then extracts an audio-only
+// stream URL via kkdai. Prefers audio-only formats (webm/opus or m4a) which are
+// directly playable by HTML5 <audio> without requiring ffmpeg.
+// Returns ("", error) on failure so frontend can fall back to iTunes preview.
 func (a *App) GetFullStreamURL(artist string, title string, key1 string, key2 string) (string, error) {
 	query := fmt.Sprintf("%s %s audio", artist, title)
 
@@ -934,7 +936,7 @@ func (a *App) GetFullStreamURL(artist string, title string, key1 string, key2 st
 	videoID, err = tryKey(key1)
 	if err != nil {
 		fmt.Printf("[YouTube] Key 1 failed: %v\n", err)
-		
+
 		// Fallback to Key 2
 		videoID, err = tryKey(key2)
 		if err != nil {
@@ -949,23 +951,68 @@ func (a *App) GetFullStreamURL(artist string, title string, key1 string, key2 st
 	ytClient := youtube.Client{}
 	video, err := ytClient.GetVideo(videoID)
 	if err != nil {
-		fmt.Printf("[YouTube] kkdai error: %v\n", err)
+		fmt.Printf("[YouTube] kkdai GetVideo error: %v\n", err)
 		return "", err
 	}
 
-	formats := video.Formats.WithAudioChannels()
-	if len(formats) == 0 {
-		return "", fmt.Errorf("no audio formats for video %s", videoID)
-	}
-	formats.Sort()
+	// Step 3: Prefer AUDIO-ONLY formats (no video track) — these are:
+	//   - webm/opus  (itag 249, 250, 251) — best for Chrome/Chromium WebView2
+	//   - mp4/m4a    (itag 139, 140, 141) — fallback for broader compatibility
+	// Audio-only formats are smaller, faster to start, and work directly in HTML5 <audio>.
+	// Mixed video+audio formats (itag 18, 22, etc.) often have seeking issues in WebView2.
+	var selectedFormat *youtube.Format
 
-	streamURL, err := ytClient.GetStreamURL(video, &formats[0])
+	// Priority 1: webm audio-only (opus codec — best quality/size for Chromium WebView2)
+	for i := range video.Formats {
+		f := &video.Formats[i]
+		if f.AudioChannels > 0 && f.Width == 0 && strings.Contains(f.MimeType, "webm") {
+			fmt.Printf("[YouTube] Selected audio-only webm format: itag=%d mime=%s bitrate=%d\n",
+				f.ItagNo, f.MimeType, f.Bitrate)
+			selectedFormat = f
+			break
+		}
+	}
+
+	// Priority 2: mp4/m4a audio-only
+	if selectedFormat == nil {
+		for i := range video.Formats {
+			f := &video.Formats[i]
+			if f.AudioChannels > 0 && f.Width == 0 && strings.Contains(f.MimeType, "mp4") {
+				fmt.Printf("[YouTube] Selected audio-only mp4 format: itag=%d mime=%s bitrate=%d\n",
+					f.ItagNo, f.MimeType, f.Bitrate)
+				selectedFormat = f
+				break
+			}
+		}
+	}
+
+	// Priority 3: Any format with audio channels (mixed video+audio, last resort)
+	if selectedFormat == nil {
+		all := video.Formats.WithAudioChannels()
+		if len(all) == 0 {
+			return "", fmt.Errorf("no audio formats available for video %s", videoID)
+		}
+		all.Sort()
+		selectedFormat = &all[0]
+		fmt.Printf("[YouTube] Falling back to mixed format: itag=%d mime=%s\n",
+			selectedFormat.ItagNo, selectedFormat.MimeType)
+	}
+
+	streamURL, err := ytClient.GetStreamURL(video, selectedFormat)
 	if err != nil {
 		fmt.Printf("[YouTube] GetStreamURL error: %v\n", err)
 		return "", err
 	}
 
-	return streamURL, nil
+	// Store the raw CDN URL and return a localhost proxy URL instead.
+	// WebView2 cannot play googlevideo.com URLs directly (CORS + header restrictions).
+	// The local proxy at :54322 fetches from YouTube CDN with correct headers
+	// and streams the audio back to WebView2 as http://localhost:54322/stream?t=TOKEN.
+	token := fmt.Sprintf("%s-%d", videoID, selectedFormat.ItagNo)
+	audioProxyStore.Store(token, streamURL)
+	proxyURL := fmt.Sprintf("http://localhost:54322/stream?t=%s", token)
+	fmt.Printf("[YouTube] Proxy URL ready: %s\n", proxyURL)
+	return proxyURL, nil
 }
 
 // ─────────────────────────────────────────────

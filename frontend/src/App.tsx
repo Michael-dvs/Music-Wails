@@ -890,6 +890,25 @@ function MusicApp() {
         ref={audioRef}
         onEnded={handleSongEnd}
         onLoadedMetadata={handleLoadedMetadata}
+        onError={(e) => {
+          const audio = e.currentTarget;
+          const err = audio.error;
+          const codes: Record<number, string> = {
+            1: 'MEDIA_ERR_ABORTED',
+            2: 'MEDIA_ERR_NETWORK',
+            3: 'MEDIA_ERR_DECODE',
+            4: 'MEDIA_ERR_SRC_NOT_SUPPORTED',
+          };
+          const code = err?.code ?? 0;
+          console.error(
+            `[Audio] ❌ Playback error — code=${code} (${codes[code] ?? 'UNKNOWN'})`,
+            `src=${audio.src?.substring(0, 80)}...`,
+            err?.message
+          );
+        }}
+        onStalled={() => console.warn('[Audio] ⚠️ Stalled — browser stopped receiving data (possible CORS/CSP block)')}
+        onWaiting={() => console.log('[Audio] ⏳ Waiting — buffering...')}
+        onCanPlay={() => console.log('[Audio] ✅ canplay — stream ready to play')}
         preload="auto"
       />
     </div>

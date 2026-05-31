@@ -1016,6 +1016,48 @@ func (a *App) GetFullStreamURL(artist string, title string, key1 string, key2 st
 }
 
 // ─────────────────────────────────────────────
+//  ASYNC STREAM RESOLUTION
+// ─────────────────────────────────────────────
+
+// GetStreamURLAsync starts a background goroutine to resolve a YouTube audio stream URL.
+// This function returns IMMEDIATELY (non-blocking) — the UI can show a loading state
+// without freezing. Results are pushed to the React frontend via Wails events:
+//
+//   Event "stream:ready":
+//     { "songId": string, "url": string, "isHQ": bool }
+//     isHQ=true  → YouTube high-quality proxy URL  (play this directly)
+//     isHQ=false → YouTube unavailable; frontend should use iTunes preview URL from song data
+//
+// Design constraints honoured:
+//   - NO audio is started here — React decides when and what to play.
+//   - NO swapping mid-playback; React plays exactly ONE URL per song.
+//   - Lyrics are NOT touched here; React's own GetLyrics + backoff polling handle them.
+func (a *App) GetStreamURLAsync(songID, artist, title, key1, key2 string) {
+	go func() {
+		fmt.Printf("[StreamAsync] Starting resolution for songID=%s '%s - %s'\n", songID, artist, title)
+
+		streamURL, err := a.GetFullStreamURL(artist, title, key1, key2)
+		if err == nil && streamURL != "" {
+			fmt.Printf("[StreamAsync] YouTube URL ready for songID=%s\n", songID)
+			runtime.EventsEmit(a.ctx, "stream:ready", map[string]interface{}{
+				"songId": songID,
+				"url":    streamURL,
+				"isHQ":   true,
+			})
+		} else {
+			// YouTube unavailable (quota, empty keys, network error).
+			// Signal the frontend to fall back to its own iTunes preview URL.
+			fmt.Printf("[StreamAsync] YouTube failed for songID=%s: %v — signalling iTunes fallback\n", songID, err)
+			runtime.EventsEmit(a.ctx, "stream:ready", map[string]interface{}{
+				"songId": songID,
+				"url":    "",
+				"isHQ":   false,
+			})
+		}
+	}()
+}
+
+// ─────────────────────────────────────────────
 //  SMART SHUFFLE — ARTIST SANITIZATION + LAST.FM DISCOVERY
 // ─────────────────────────────────────────────
 

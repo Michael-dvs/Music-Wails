@@ -15,7 +15,8 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 
 import { main } from '../wailsjs/go/models';
-import { GetFullStreamURL, GetLyrics, BuildSmartQueue } from '../wailsjs/go/main/App';
+import { GetStreamURLAsync, GetLyrics, BuildSmartQueue } from '../wailsjs/go/main/App';
+import { EventsOn } from '../wailsjs/runtime/runtime';
 
 // ──────────────────────────────────────────
 //  Lyrics helpers (shared)
@@ -301,6 +302,71 @@ function MusicApp() {
   }, []);
 
   // ──────────────────────────────────────────
+  //  Wails Event: "stream:ready"
+  //  Go goroutine signals that YouTube URL is resolved (isHQ=true)
+  //  or that YouTube is unavailable (isHQ=false → use iTunes preview from song data).
+  //
+  //  Design guarantees:
+  //  • Audio plays ONCE per song — either YouTube or iTunes, never swapped mid-play.
+  //  • If song changed before event fires, the event is ignored (stale guard on songId).
+  //  • Lyrics logic is UNTOUCHED — fetchLyricsBackground + exponential backoff unchanged.
+  // ──────────────────────────────────────────
+  useEffect(() => {
+    const off = EventsOn(
+      'stream:ready',
+      (data: { songId: string; url: string; isHQ: boolean }) => {
+        // ── Stale guard: ignore if the user has already moved to a different song ──
+        if (!audioRef.current || currentSongRef.current?.id !== data.songId) {
+          console.log(`[StreamAsync] Discarding stale event for songId=${data.songId}`);
+          return;
+        }
+
+        const song = currentSongRef.current;
+        const playURL = data.isHQ ? data.url : getPreviewURL(song);
+
+        if (!playURL) {
+          console.warn('[StreamAsync] No playable URL available for this song.');
+          setStreamLoading(false);
+          return;
+        }
+
+        console.log(`[StreamAsync] Playing ${data.isHQ ? 'YouTube HQ' : 'iTunes preview'} for songId=${data.songId}`);
+        setIsHighQuality(data.isHQ);
+        audioRef.current.src = playURL;
+        audioRef.current
+          .play()
+          .then(() => {
+            setIsPlaying(true);
+            setStreamLoading(false);
+          })
+          .catch((err) => {
+            console.error('[StreamAsync] Playback failed:', err);
+            // If YouTube URL failed to play (CDN rejection etc.), gracefully fall
+            // back to iTunes preview — but ONLY once (no further recursion).
+            if (data.isHQ) {
+              const fallback = getPreviewURL(currentSongRef.current!);
+              if (fallback && audioRef.current) {
+                console.warn('[StreamAsync] YouTube playback failed — using iTunes preview as last resort');
+                setIsHighQuality(false);
+                audioRef.current.src = fallback;
+                audioRef.current
+                  .play()
+                  .then(() => { setIsPlaying(true); setStreamLoading(false); })
+                  .catch(() => { setStreamLoading(false); });
+              } else {
+                setStreamLoading(false);
+              }
+            } else {
+              setStreamLoading(false);
+            }
+          });
+      },
+    );
+    // Cleanup: Wails EventsOn returns an unsubscribe function
+    return () => { off(); };
+  }, []); // mount-once — handler uses refs only, zero stale-closure risk
+
+  // ──────────────────────────────────────────
   //  Smart Queue builder — with Fisher-Yates variety + deduplication filter
   //  knownQueue: the queue snapshot at call time (avoids stale queueRef reads during async state flush)
   // ──────────────────────────────────────────
@@ -474,49 +540,22 @@ function MusicApp() {
     setCurrentTimeSeconds(0);
     setAudioDuration(0);
 
+    // Fetch lyrics concurrently in background — UNCHANGED.
+    // Exponential backoff polling is also preserved in its own useEffect below.
     fetchLyricsBackground(song);
 
-    const previewURL = getPreviewURL(song);
-
-    const playFallback = () => {
-      setIsHighQuality(false);
-      if (previewURL && audioRef.current) {
-        audioRef.current.src = previewURL;
-        audioRef.current.play()
-          .then(() => { setIsPlaying(true); setStreamLoading(false); })
-          .catch(err => { console.error('Preview error:', err); setStreamLoading(false); });
-      } else {
-        setStreamLoading(false);
-      }
-    };
-
-    // Try YouTube high-quality stream first
-    try {
-      // Read API keys from ref to always get the latest value (avoids stale closure)
-      const key1 = profileRef.current?.youtube_api_key_1 || '';
-      const key2 = profileRef.current?.youtube_api_key_2 || '';
-      console.log(`[YouTube] Attempting stream with key1=${key1 ? '✓ set' : '✗ empty'}, key2=${key2 ? '✓ set' : '✗ empty'}`);
-      const ytURL = await GetFullStreamURL(song.artist, song.title, key1, key2);
-      if (ytURL && ytURL.trim() !== '' && audioRef.current) {
-        audioRef.current.src = ytURL;
-        audioRef.current.play()
-          .then(() => { 
-            setIsHighQuality(true); 
-            setIsPlaying(true); 
-            setStreamLoading(false); 
-          })
-          .catch(() => {
-            playFallback();
-          });
-      } else {
-        playFallback();
-      }
-    } catch (e: any) {
-      const is429 = String(e).includes('429') || String(e).includes('quota');
-      console.warn(`[YouTube] ${is429 ? 'Rate-limited (429)' : 'Error'} — falling back to iTunes preview`);
-      playFallback();
-    }
+    // ── Kick off async YouTube stream resolution (non-blocking) ──
+    // GetStreamURLAsync returns immediately; result arrives via "stream:ready" Wails event.
+    // The event handler above (useEffect/EventsOn) decides what to play based on:
+    //   • isHQ=true  → play YouTube URL directly
+    //   • isHQ=false → play iTunes preview from song.streamUrl / song.previewUrl
+    // No audio URL is set here — the event handler owns the first and only play().
+    const key1 = profileRef.current?.youtube_api_key_1 || '';
+    const key2 = profileRef.current?.youtube_api_key_2 || '';
+    console.log(`[StreamAsync] Requesting stream for "${song.artist} - ${song.title}" (key1=${key1 ? '✓' : '✗'}, key2=${key2 ? '✓' : '✗'})`);
+    GetStreamURLAsync(song.id, song.artist, song.title, key1, key2);
   }, [fetchLyricsBackground]);
+
 
   const toggleShuffle = useCallback((v?: boolean) => {
     const nextShuffle = v !== undefined ? v : !isShuffle;

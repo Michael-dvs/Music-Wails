@@ -38,6 +38,10 @@ export function GetPlaylist(arg1) {
   return window['go']['main']['App']['GetPlaylist'](arg1);
 }
 
+export function GetStreamURLAsync(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['App']['GetStreamURLAsync'](arg1, arg2, arg3, arg4, arg5);
+}
+
 export function GetTrackPulseDuration(arg1, arg2) {
   return window['go']['main']['App']['GetTrackPulseDuration'](arg1, arg2);
 }

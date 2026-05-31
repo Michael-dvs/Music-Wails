@@ -20,6 +20,8 @@ export function GetLyrics(arg1:string,arg2:string,arg3:number):Promise<main.Lyri
 
 export function GetPlaylist(arg1:string):Promise<Array<main.Song>>;
 
+export function GetStreamURLAsync(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string):Promise<void>;
+
 export function GetTrackPulseDuration(arg1:string,arg2:string):Promise<number>;
 
 export function GetUserProfile(arg1:string):Promise<main.UserProfile>;

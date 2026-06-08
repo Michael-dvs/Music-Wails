@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { ArrowLeft, Play, Loader2, Clock, Music2 } from 'lucide-react';
 import { main } from '../../wailsjs/go/models';
 import { fetchAPI } from '../lib/fetchAPI';
+import { useContextMenu } from '../contexts/ContextMenuContext';
 
 // ── iTunes types ──────────────────────────────────────────────────
 export interface ItunesTrack {
@@ -119,6 +120,7 @@ interface AlbumDetailProps {
 
 // ── Component ─────────────────────────────────────────────────────
 export default function AlbumDetail({ album, onBack, onPlaySong, onNavigateToArtist }: AlbumDetailProps) {
+  const { openContextMenu } = useContextMenu();
   const [tracks, setTracks] = useState<ItunesTrack[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -341,6 +343,17 @@ export default function AlbumDetail({ album, onBack, onPlaySong, onNavigateToArt
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: idx * 0.02, duration: 0.2 }}
                 onClick={() => handlePlayTrack(track)}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  const song = itunesTrackToSong(track);
+                  openContextMenu(e.clientX, e.clientY, {
+                    id: song.id,
+                    title: song.title,
+                    artist: song.artist,
+                    album: song.album ?? '',
+                    coverArt: song.coverArt ?? '',
+                  });
+                }}
                 className="group grid grid-cols-[32px_1fr_80px] gap-4 px-4 py-3.5 rounded-xl cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 transition-all duration-150 items-center"
               >
                 {/* Track number → play icon on hover */}

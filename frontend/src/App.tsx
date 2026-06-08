@@ -1,9 +1,11 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 
 import Sidebar from './components/Sidebar';
 import PlayerBar from './components/PlayerBar';
 import QueuePanel from './components/QueuePanel';
+import AddPlaylistModal from './components/AddPlaylistModal';
+import ContextMenu, { type ContextMenuSongData } from './components/ContextMenu';
 import Search from './pages/Search';
 import Home from './pages/Home';
 import Lyrics from './pages/Lyrics';
@@ -11,11 +13,15 @@ import LoginPage from './pages/LoginPage';
 import Settings from './pages/Settings';
 import Profile from './pages/Profile';
 import ArtistDetail from './pages/ArtistDetail';
+import LikedSongsPage from './pages/LikedSongs';
+import RecentlyPlayedPage from './pages/RecentlyPlayed';
+import PlaylistsPage from './pages/PlaylistsPage';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
+import { ContextMenuProvider, useContextMenu } from './contexts/ContextMenuContext';
 
 import { main } from '../wailsjs/go/models';
-import { GetStreamURLAsync, GetLyrics, BuildSmartQueue } from '../wailsjs/go/main/App';
+import { GetStreamURLAsync, GetLyrics, BuildSmartQueue, LogSongPlay } from '../wailsjs/go/main/App';
 import { EventsOn } from '../wailsjs/runtime/runtime';
 
 // ──────────────────────────────────────────
@@ -81,10 +87,13 @@ const initialPersistedState = (() => {
 //  App (authenticated music player)
 // ──────────────────────────────────────────
 function MusicApp() {
-  const { user, profile } = useAuth();
+  const { user, profile, isFavorited: checkFavorited, addFavorite, removeFavorite } = useAuth();
+  const { contextMenu, closeContextMenu } = useContextMenu();
   const [activeTab, setActiveTab] = useState('home');
   const [sidebarWidth, setSidebarWidth] = useState(240);
   const [isDragging, setIsDragging] = useState(false);
+  // Local favorite state — mirrors Supabase via optimistic update
+  const [currentSongFavorited, setCurrentSongFavorited] = useState(false);
 
   // Global artist page navigation — state lifted here for PlayerBar access
   const [artistView, setArtistView] = useState<{ id: number; name: string; genre?: string } | null>(null);
@@ -133,6 +142,7 @@ function MusicApp() {
   // UI panels
   const [showLyrics, setShowLyrics] = useState(false);
   const [showQueue, setShowQueue] = useState(false);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
   // Lyrics
   const [currentTimeSeconds, setCurrentTimeSeconds] = useState(0);
@@ -200,33 +210,27 @@ function MusicApp() {
     };
   }, [currentSong]);
 
-  // ── Disable Inspect Element and Context Menu ──
+  // ── Sync isFavorited when song changes ──
+  useEffect(() => {
+    if (currentSong?.id) {
+      setCurrentSongFavorited(checkFavorited(currentSong.id));
+    } else {
+      setCurrentSongFavorited(false);
+    }
+  }, [currentSong?.id, checkFavorited]);
+
+  // ── Global context menu blocker (replaces with custom menu) ──
+  // Allows right-click on input/textarea so users can paste text.
   useEffect(() => {
     const handleContextMenu = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      const tag = target?.tagName;
+      // Preserve native context menu on text fields
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || target?.isContentEditable) return;
       e.preventDefault();
     };
-
-    const handleKeyDownInspect = (e: KeyboardEvent) => {
-      // F12
-      if (e.key === 'F12') {
-        e.preventDefault();
-      }
-      // Ctrl+Shift+I, J, C and Ctrl+U
-      if (e.ctrlKey && e.shiftKey && ['I', 'i', 'J', 'j', 'C', 'c'].includes(e.key)) {
-        e.preventDefault();
-      }
-      if (e.ctrlKey && ['U', 'u'].includes(e.key)) {
-        e.preventDefault();
-      }
-    };
-
     document.addEventListener('contextmenu', handleContextMenu);
-    document.addEventListener('keydown', handleKeyDownInspect);
-
-    return () => {
-      document.removeEventListener('contextmenu', handleContextMenu);
-      document.removeEventListener('keydown', handleKeyDownInspect);
-    };
+    return () => document.removeEventListener('contextmenu', handleContextMenu);
   }, []);
 
   // ── Keyboard shortcuts (Esc closes Lyrics; cleanup prevents leaks) ──
@@ -544,6 +548,16 @@ function MusicApp() {
     // Exponential backoff polling is also preserved in its own useEffect below.
     fetchLyricsBackground(song);
 
+    // ── Fire-and-forget: log this play to local recently_played.json via Go ──
+    // Uses OS-level file I/O in Go — no Supabase dependency, no JWT needed.
+    LogSongPlay(
+      song.id,
+      song.title,
+      song.artist,
+      (song as any).album ?? '',
+      song.coverArt ?? '',
+    ).catch(err => console.warn('[LogSongPlay] non-fatal:', err));
+
     // ── Kick off async YouTube stream resolution (non-blocking) ──
     // GetStreamURLAsync returns immediately; result arrives via "stream:ready" Wails event.
     // The event handler above (useEffect/EventsOn) decides what to play based on:
@@ -797,6 +811,73 @@ function MusicApp() {
     }
   }, [isShuffle, playSongCore, buildAndSetSmartQueue]);
 
+  // ── Play Next — inserts song right after current in queue ──
+  const handlePlayNext = useCallback((song: ContextMenuSongData) => {
+    const q = queueRef.current;
+    const cur = currentSongRef.current;
+    const newSong: AnyTrack = {
+      id: song.id,
+      title: song.title,
+      artist: song.artist,
+      album: song.album ?? '',
+      coverArt: song.coverArt ?? '',
+      duration: 0,
+      streamUrl: song.previewUrl ?? '',
+      genre: '',
+    } as any;
+
+    let curIdx = cur ? q.findIndex(s => s.id === cur.id) : -1;
+    if (curIdx === -1) curIdx = 0;
+
+    // Remove if already in queue to prevent duplicates
+    const cleaned = q.filter(s => s.id !== song.id);
+    const newQueue = [
+      ...cleaned.slice(0, curIdx + 1),
+      newSong,
+      ...cleaned.slice(curIdx + 1),
+    ];
+    setQueue(newQueue);
+    queueRef.current = newQueue;
+    console.log(`[ContextMenu] "${song.title}" inserted as Play Next at index ${curIdx + 1}`);
+  }, []);
+
+  // ── Add to Queue — appends song to the very end of the queue ──
+  const handleAddQueue = useCallback((song: ContextMenuSongData) => {
+    const q = queueRef.current;
+    const newSong: AnyTrack = {
+      id: song.id,
+      title: song.title,
+      artist: song.artist,
+      album: song.album ?? '',
+      coverArt: song.coverArt ?? '',
+      duration: 0,
+      streamUrl: song.previewUrl ?? '',
+      genre: '',
+    } as any;
+
+    // Remove if already in queue to prevent duplicates
+    const cleaned = q.filter(s => s.id !== song.id);
+    const newQueue = [...cleaned, newSong];
+    setQueue(newQueue);
+    queueRef.current = newQueue;
+    console.log(`[ContextMenu] "${song.title}" added to the end of the Queue`);
+  }, []);
+
+  // ── Reorder Queue — triggered by drag and drop in QueuePanel ──
+  const handleReorderQueue = useCallback((newOrder: AnyTrack[]) => {
+    setQueue(newOrder);
+    queueRef.current = newOrder;
+  }, []);
+
+  // ── Remove from Queue ──
+  const handleRemoveFromQueue = useCallback((indexToRemove: number) => {
+    setQueue(prev => {
+      const newQueue = prev.filter((_, i) => i !== indexToRemove);
+      queueRef.current = newQueue;
+      return newQueue;
+    });
+  }, []);
+
   // ── setActiveTab wrapper — always closes lyrics panel and artist view ──
   const handleSetActiveTab = useCallback((tab: string) => {
     setActiveTab(tab);
@@ -823,7 +904,11 @@ function MusicApp() {
           style={!showLyrics ? { width: sidebarWidth } : {}}
         >
           <div className="flex-1 w-full h-full overflow-hidden">
-            <Sidebar activeTab={activeTab} setActiveTab={handleSetActiveTab} />
+            <Sidebar
+              activeTab={activeTab}
+              setActiveTab={handleSetActiveTab}
+              onAddPlaylist={() => setIsAddModalOpen(true)}
+            />
           </div>
           {!showLyrics && (
             <div 
@@ -856,9 +941,31 @@ function MusicApp() {
                     {activeTab === 'search' && <Search key="search" onPlaySong={handlePlaySong} onNavigateToArtist={navigateToArtist} />}
                     {activeTab === 'profile' && <Profile key="profile" />}
                     {activeTab === 'settings' && <Settings key="settings" />}
-                    {(activeTab === 'library' || activeTab === 'playlists') && (
-                      <div key="placeholder" className="w-full h-full flex items-center justify-center text-gray-600 dark:text-gray-400">
-                        <h2 className="text-2xl font-semibold capitalize">{activeTab} — Coming Soon</h2>
+                    {activeTab === 'liked' && (
+                      <LikedSongsPage key="liked" onPlaySong={handlePlaySong} />
+                    )}
+                    {activeTab === 'recently-played' && (
+                      <RecentlyPlayedPage key="recently-played" onPlaySong={handlePlaySong} />
+                    )}
+                    {/* Playlists — fully functional */}
+                    {activeTab.startsWith('playlist:') && (
+                      <PlaylistsPage 
+                        key={activeTab} 
+                        onPlaySong={handlePlaySong} 
+                        initialPlaylistId={activeTab.split(':')[1]} 
+                        onBack={() => setActiveTab('home')}
+                      />
+                    )}
+                    {/* Top Tracks — Coming Soon */}
+                    {activeTab === 'top-tracks' && (
+                      <div key="top-tracks" className="w-full h-full flex flex-col items-center justify-center text-gray-500 dark:text-gray-400 gap-3">
+                        <div className="w-16 h-16 rounded-2xl bg-brand-500/10 flex items-center justify-center">
+                          <svg className="w-8 h-8 text-brand-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                          </svg>
+                        </div>
+                        <h2 className="text-xl font-semibold text-gray-700 dark:text-gray-300">Top Tracks</h2>
+                        <p className="text-sm text-gray-400 dark:text-gray-600">Coming Soon</p>
                       </div>
                     )}
                   </>
@@ -869,18 +976,26 @@ function MusicApp() {
             {/* Lyrics Overlay */}
             <AnimatePresence>
               {showLyrics && (
-                <Lyrics
-                  key="lyrics"
-                  currentSong={currentSong as main.Song}
-                  currentTime={currentTimeSeconds}
-                  lyrics={globalLyrics}
-                  loading={isLyricsLoading}
-                  isRetrying={isLyricsRetrying}
-                  audioDuration={audioDuration}
-                  lrcDuration={lrcDuration}
-                  bgColor={lyricsBgColor}
-                  onClose={() => setShowLyrics(false)}
-                />
+                <motion.div
+                  key="lyrics-container"
+                  initial={{ opacity: 0, y: 40 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 40 }}
+                  transition={{ duration: 0.3, ease: 'easeOut' }}
+                  className="absolute inset-0 z-50"
+                >
+                  <Lyrics
+                    currentSong={currentSong as main.Song}
+                    currentTime={currentTimeSeconds}
+                    lyrics={globalLyrics}
+                    loading={isLyricsLoading}
+                    isRetrying={isLyricsRetrying}
+                    audioDuration={audioDuration}
+                    lrcDuration={lrcDuration}
+                    bgColor={lyricsBgColor}
+                    onClose={() => setShowLyrics(false)}
+                  />
+                </motion.div>
               )}
             </AnimatePresence>
           </main>
@@ -894,6 +1009,8 @@ function MusicApp() {
               currentSong={currentSong as main.SmartTrack}
               onPlayTrack={(track) => playSongCore(track, queueRef.current)}
               isSmartShuffleActive={isSmartShuffleActive}
+              onReorderQueue={handleReorderQueue}
+              onRemoveTrack={handleRemoveFromQueue}
             />
           </div>
         </div>
@@ -923,6 +1040,8 @@ function MusicApp() {
         isRepeat={isRepeat}
         setIsRepeat={setIsRepeat}
         onNavigateToArtist={navigateToArtist}
+        isFavorited={currentSongFavorited}
+        onToggleFavorite={(nowFavorited) => setCurrentSongFavorited(nowFavorited)}
       />
 
       <audio
@@ -949,6 +1068,26 @@ function MusicApp() {
         onWaiting={() => console.log('[Audio] ⏳ Waiting — buffering...')}
         onCanPlay={() => console.log('[Audio] ✅ canplay — stream ready to play')}
         preload="auto"
+      />
+
+      {/* ── Add Playlist Modal ─────────────────────────────────── */}
+      <AddPlaylistModal
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+        suggestedTracks={queue.length > 0 ? queue.slice(0, 7) : []}
+        onPlaylistCreated={(playlistId, playlistName) => {
+          console.log('[App] Playlist created:', playlistName, playlistId);
+          // Navigate to the newly created playlist detail page
+          setActiveTab(`playlist:${playlistId}`);
+        }}
+      />
+
+      {/* ── Global Context Menu ─────────────────────────────────── */}
+      <ContextMenu
+        state={contextMenu}
+        onClose={closeContextMenu}
+        onPlayNext={handlePlayNext}
+        onAddQueue={handleAddQueue}
       />
     </div>
   );
@@ -984,9 +1123,11 @@ function AuthGate() {
 export default function App() {
   return (
     <ThemeProvider>
-      <AuthProvider>
-        <AuthGate />
-      </AuthProvider>
+      <ContextMenuProvider>
+        <AuthProvider>
+          <AuthGate />
+        </AuthProvider>
+      </ContextMenuProvider>
     </ThemeProvider>
   );
 }

@@ -88,14 +88,6 @@ export default function UserBadge({ setActiveTab }: UserBadgeProps) {
               </button>
 
               <button
-                onClick={() => { setActiveTab('library'); setShowMenu(false); }}
-                className="w-full flex items-center space-x-2.5 px-3 py-2.5 text-[13px] text-[var(--app-text-secondary)] hover:text-gray-900 hover:bg-black/5 dark:hover:text-white dark:hover:bg-white/5 transition-colors border-b border-gray-200 dark:border-[#2c2c2e]"
-              >
-                <Star className="w-4 h-4" />
-                <span>Favorit Saya</span>
-              </button>
-
-              <button
                 onClick={() => { signOut(); setShowMenu(false); }}
                 className="w-full flex items-center space-x-2.5 px-3 py-2.5 text-[13px] text-[#FA243C] hover:text-red-400 hover:bg-red-500/5 transition-colors"
               >

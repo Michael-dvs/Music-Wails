@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"embed"
 	"fmt"
 	"io"
@@ -10,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -104,7 +106,8 @@ var audioProxyStore sync.Map // map[string]string: token → rawYouTubeURL
 // startAudioProxyServer starts a local HTTP server on :54322 that proxies YouTube CDN streams.
 // This is necessary because WebView2 cannot directly play googlevideo.com URLs due to
 // CORS restrictions — Go acts as a middleman providing correct headers and range support.
-func startAudioProxyServer() {
+// Returns the *http.Server so the caller can perform a graceful shutdown.
+func startAudioProxyServer() *http.Server {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/stream", func(w http.ResponseWriter, r *http.Request) {
@@ -181,6 +184,7 @@ func startAudioProxyServer() {
 			fmt.Printf("[AudioProxy] Server error: %v\n", err)
 		}
 	}()
+	return srv
 }
 
 func min(a, b int) int {
@@ -194,8 +198,8 @@ func main() {
 	// Load embedded .env before creating the app so credentials are available
 	loadDotEnv()
 
-	// Start local audio proxy so WebView2 can play YouTube streams without CORS issues
-	startAudioProxyServer()
+	// Start local audio proxy and keep a handle for graceful shutdown
+	audioProxy := startAudioProxyServer()
 
 	// Create an instance of the app structure
 	app := NewApp()
@@ -211,6 +215,20 @@ func main() {
 		},
 		BackgroundColour: &options.RGBA{R: 12, G: 12, B: 12, A: 1},
 		OnStartup:        app.startup,
+		// OnBeforeClose: called when the user closes the window.
+		// Gracefully shut down the audio proxy server so the port is
+		// released immediately — prevents "bind: Only one usage of
+		// each socket address" on the next launch.
+		OnBeforeClose: func(ctx context.Context) bool {
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+			if err := audioProxy.Shutdown(shutdownCtx); err != nil {
+				fmt.Printf("[AudioProxy] Shutdown error: %v\n", err)
+			} else {
+				fmt.Println("[AudioProxy] Server stopped cleanly.")
+			}
+			return false // false = allow window to close
+		},
 		Bind: []interface{}{
 			app,
 		},
@@ -222,6 +240,9 @@ func main() {
 		Mac: &mac.Options{
 			WebviewIsTransparent: true,
 			WindowIsTranslucent:  true,
+		},
+		Debug: options.Debug{
+			OpenInspectorOnStartup: true,
 		},
 	})
 

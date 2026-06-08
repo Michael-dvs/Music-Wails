@@ -4,9 +4,15 @@ import {main} from '../models';
 
 export function AddFavorite(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string,arg6:string,arg7:string):Promise<void>;
 
+export function AddTrackToPlaylist(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string,arg6:string):Promise<void>;
+
 export function BuildSmartQueue(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string):Promise<Array<main.SmartTrack>>;
 
 export function CheckAuthSession(arg1:string):Promise<main.AuthUserInfo>;
+
+export function CreatePlaylist(arg1:string):Promise<main.PlaylistRow>;
+
+export function DeletePlaylist(arg1:string):Promise<void>;
 
 export function FetchExternalAPI(arg1:string):Promise<string>;
 
@@ -20,16 +26,30 @@ export function GetLyrics(arg1:string,arg2:string,arg3:number):Promise<main.Lyri
 
 export function GetPlaylist(arg1:string):Promise<Array<main.Song>>;
 
+export function GetPlaylistTracks(arg1:string):Promise<Array<main.PlaylistTrackRow>>;
+
+export function GetPlaylists():Promise<Array<main.PlaylistRow>>;
+
+export function GetRecentlyPlayed():Promise<Array<main.RecentlyPlayedEntry>>;
+
 export function GetStreamURLAsync(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string):Promise<void>;
 
 export function GetTrackPulseDuration(arg1:string,arg2:string):Promise<number>;
 
 export function GetUserProfile(arg1:string):Promise<main.UserProfile>;
 
+export function LogSongPlay(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string):Promise<void>;
+
 export function RemoveFavorite(arg1:string,arg2:string):Promise<void>;
+
+export function ScrapeSpotifyPlaylist(arg1:string):Promise<Array<main.SpotifyTrack>>;
 
 export function SearchSongs(arg1:string):Promise<Array<main.Song>>;
 
+export function SetUserToken(arg1:string):Promise<void>;
+
 export function StartGoogleLogin():Promise<void>;
+
+export function ToggleFavorite(arg1:string,arg2:string,arg3:string,arg4:string):Promise<boolean>;
 
 export function UpdateHomeContent(arg1:string,arg2:main.HomeSettingRow):Promise<void>;

@@ -50,3 +50,35 @@ export interface HomeSettingRow {
   display_order: number;
   is_active: boolean;
 }
+
+export interface PlayHistoryEntry {
+  id: string;
+  user_id: string;
+  track_id: string;
+  title: string;
+  artist: string;
+  album: string | null;
+  cover_url: string | null;
+  played_at: string;
+}
+
+export interface Playlist {
+  id: string;
+  user_id: string;
+  name: string;
+  cover_url: string | null;
+  created_at: string;
+}
+
+export interface PlaylistTrack {
+  id: string;
+  playlist_id: string;
+  track_id: string;
+  title: string;
+  artist: string;
+  album: string | null;
+  cover_url: string | null;
+  added_at: string;
+  duration?: number | null; // duration in ms
+  order_index?: number | null; // drag and drop sorting order
+}

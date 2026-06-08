@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, useCallback, ReactNode 
 import { Session, User } from '@supabase/supabase-js';
 import { supabase, UserProfile, FavoriteTrack } from '../lib/supabase';
 import { EventsOn, EventsOff } from '../../wailsjs/runtime/runtime';
+import { SetUserToken } from '../../wailsjs/go/main/App';
 
 // ── Error message translator ────────────────────────────────────
 // Maps Supabase raw error messages to friendly Indonesian messages
@@ -101,6 +102,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (session?.user) {
         fetchProfile(session.user.id);
         refreshFavorites();
+        // ── Sync JWT to Go backend so RLS-protected calls work ──
+        SetUserToken(session.access_token).catch(() => {});
       }
       setIsLoading(false);
     });
@@ -108,6 +111,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       setUser(session?.user ?? null);
+      // ── Always sync token to Go (null token = user signed out) ──
+      SetUserToken(session?.access_token ?? '').catch(() => {});
       if (session?.user) {
         fetchProfile(session.user.id);
         refreshFavorites();
@@ -118,26 +123,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     // ── Wails events from Go OAuth callback server ──────────────
-    // Fires when StartGoogleLogin() captures the tokens from localhost:54321
-    const unlistenSuccess = EventsOn('login-success', async (data: { access_token: string; refresh_token: string }) => {
-      try {
-        const { data: sessionData, error } = await supabase.auth.setSession({
-          access_token:  data.access_token,
-          refresh_token: data.refresh_token,
-        });
-        if (error) {
-          console.error('[Auth] setSession failed:', error.message);
-        } else if (sessionData?.session) {
-          // Instant state update for UX
-          setSession(sessionData.session);
-          setUser(sessionData.session.user);
-          fetchProfile(sessionData.session.user.id);
-          refreshFavorites();
-        }
-      } catch (e) {
-        console.error('[Auth] setSession exception:', e);
-      }
-    });
+    // The oauth-raw-url success event is now fully handled in LoginPage.tsx
+    // to cleanly handle redirection and PKCE logic via the React router.
 
     const unlistenError = EventsOn('auth:google:error', (errorMsg: string) => {
       console.error('[Auth] Google login error from Go:', errorMsg);
@@ -146,9 +133,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return () => {
       listener.subscription.unsubscribe();
-      EventsOff('login-success');
       EventsOff('auth:google:error');
-      if (typeof unlistenSuccess === 'function') unlistenSuccess();
       if (typeof unlistenError   === 'function') unlistenError();
     };
   }, [fetchProfile, refreshFavorites]);

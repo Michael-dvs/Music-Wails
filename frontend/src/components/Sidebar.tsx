@@ -1,79 +1,265 @@
-import { Home, Search, Library, ListMusic } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import {
+  Home, Search, Heart, Clock, TrendingUp, ListMusic, Plus, ChevronDown, Library
+} from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import UserBadge from './UserBadge';
 import appIcon from '../assets/appicon.png';
-import { motion } from 'framer-motion';
+import { getPlaylists } from '../lib/supabaseOps';
+import type { Playlist } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../lib/supabase';
 
 interface SidebarProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
+  onAddPlaylist: () => void;
 }
 
-export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
-  const menuItems = [
-    { id: 'home',      icon: Home,      label: 'Home' },
-    { id: 'search',    icon: Search,    label: 'Search' },
-    { id: 'library',   icon: Library,   label: 'Library' },
-    { id: 'playlists', icon: ListMusic, label: 'Playlists' },
-  ];
+// ── Shared Nav Button ────────────────────────────────────────────
+function NavItem({
+  id,
+  icon: Icon,
+  label,
+  activeTab,
+  setActiveTab,
+  indent = false,
+  coverUrl,
+}: {
+  id: string;
+  icon: React.ElementType;
+  label: string;
+  activeTab: string;
+  setActiveTab: (tab: string) => void;
+  indent?: boolean;
+  coverUrl?: string;
+}) {
+  const isActive = activeTab === id;
+  const paddingClass = indent ? 'pl-[36px] pr-3 py-2' : 'px-3 py-2';
 
   return (
-    /* BACKGROUND ADAPTIF: Abu-abu super muda di Light Mode, Hitam/Abu-tua di Dark Mode */
-    <div className="w-full h-full flex flex-col p-5 pb-5 z-10 bg-[#F9F9F9]/90 dark:bg-[#1a1a1a]/90 backdrop-blur-lg border-r border-gray-200 dark:border-white/5">
-      
-      {/* Logo */}
-      <div className="flex items-center space-x-3 mb-8 px-1">
-        <div className="w-10 h-10 rounded-lg overflow-hidden flex items-center justify-center shadow-lg shadow-brand-500/30 flex-shrink-0">
+    <button
+      id={`sidebar-nav-${id.replace(':', '-')}`}
+      onClick={() => setActiveTab(id)}
+      className={`w-full flex items-center gap-4 rounded-md transition-colors text-sm font-medium ${paddingClass} ${
+        isActive
+          ? 'bg-brand-500/10 text-brand-600 dark:bg-brand-500/15 dark:text-brand-400'
+          : 'text-zinc-400 hover:text-zinc-100'
+      }`}
+      title={label}
+    >
+      {coverUrl ? (
+        <img
+          src={coverUrl}
+          alt=""
+          className="w-5 h-5 rounded-sm object-cover flex-shrink-0"
+        />
+      ) : (
+        <Icon
+          className={`flex-shrink-0 w-5 h-5 ${
+            isActive ? 'text-brand-600 dark:text-brand-400' : 'text-zinc-400'
+          }`}
+        />
+      )}
+      <span className="truncate flex-1 text-left">{label}</span>
+      {isActive && (
+        <span className="ml-auto w-1.5 h-1.5 rounded-full bg-brand-500 flex-shrink-0" />
+      )}
+    </button>
+  );
+}
+
+// ── Section Label ────────────────────────────────────────────────
+function SectionLabel({ children, icon: Icon }: { children: React.ReactNode, icon?: React.ElementType }) {
+  return (
+    <div className="flex items-center gap-2 text-xs font-semibold tracking-widest text-zinc-500 uppercase mb-2 px-3">
+      {Icon && <Icon className="w-4 h-4 flex-shrink-0" />}
+      <span>{children}</span>
+    </div>
+  );
+}
+
+// ── Main Sidebar ─────────────────────────────────────────────────
+export default function Sidebar({ activeTab, setActiveTab, onAddPlaylist }: SidebarProps) {
+  const { user } = useAuth();
+  const [playlistsOpen, setPlaylistsOpen] = useState(true);
+  const [playlists, setPlaylists] = useState<Playlist[]>([]);
+  const [isLoadingPlaylists, setIsLoadingPlaylists] = useState(true);
+
+  const fetchPlaylists = useCallback(async () => {
+    if (!user) {
+      setPlaylists([]);
+      setIsLoadingPlaylists(false);
+      return;
+    }
+    try {
+      const data = await getPlaylists();
+      setPlaylists(data);
+    } catch (err) {
+      console.error('[Sidebar] Failed to fetch playlists', err);
+    } finally {
+      setIsLoadingPlaylists(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    fetchPlaylists();
+
+    const handleUpdate = () => {
+      console.log('[Sidebar] playlistUpdated event received, re-fetching playlists...');
+      fetchPlaylists();
+    };
+    window.addEventListener('playlistUpdated', handleUpdate);
+
+    if (!user) {
+      return () => {
+        window.removeEventListener('playlistUpdated', handleUpdate);
+      };
+    }
+    
+    // Subscribe to realtime updates for playlists
+    const channel = supabase
+      .channel('public:playlists')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'playlists', filter: `user_id=eq.${user.id}` },
+        () => {
+          fetchPlaylists();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      window.removeEventListener('playlistUpdated', handleUpdate);
+      supabase.removeChannel(channel);
+    };
+  }, [fetchPlaylists, user]);
+
+  return (
+    <div className="w-full h-full flex flex-col p-4 pb-4 z-10 bg-[#F9F9F9]/90 dark:bg-[#1a1a1a]/90 backdrop-blur-lg border-r border-gray-200 dark:border-white/5 overflow-hidden">
+
+      {/* ── Logo ─────────────────────────────────────────────── */}
+      <div className="flex items-center space-x-3 mb-6 px-1 flex-shrink-0">
+        <div className="w-9 h-9 rounded-lg overflow-hidden flex items-center justify-center shadow-lg shadow-brand-500/30 flex-shrink-0">
           <motion.img
             src={appIcon}
             alt="Music-Wails"
             initial={{ scale: 0.85, opacity: 0 }}
-            animate={{ scale: 1,    opacity: 1 }}
+            animate={{ scale: 1, opacity: 1 }}
             transition={{ duration: 0.5, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
           />
         </div>
-        <h1 className="text-[15px] font-semibold tracking-tight text-gray-900 dark:text-white truncate">
+        <h1 className="text-[14px] font-semibold tracking-tight text-gray-900 dark:text-white truncate">
           Music-Wails
         </h1>
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 space-y-0.5 overflow-y-auto overflow-x-hidden">
-        {/* TEKS HEADER MENU: Menggunakan gray-400 untuk Light Mode agar terlihat rapi */}
-        <p className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-3 px-3">
-          Menu
-        </p>
-        
-        {menuItems.map((item) => {
-          const Icon = item.icon;
-          const isActive = activeTab === item.id;
-          return (
-            <button
-              key={item.id}
-              onClick={() => setActiveTab(item.id)}
-              className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg transition-all duration-200 text-[13px] font-medium ${
-                isActive
-                  ? 'bg-brand-500/10 text-brand-600 dark:bg-brand-500/15 dark:text-brand-400'
-                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200/60 hover:text-gray-900 dark:hover:bg-white/5 dark:hover:text-white'
-              }`}
-              title={item.label}
-            >
-              <Icon
-                className={`w-4 h-4 flex-shrink-0 ${
-                  isActive ? 'text-brand-600 dark:text-brand-400' : 'text-gray-500 dark:text-gray-400'
-                }`}
-              />
-              <span className="truncate">{item.label}</span>
-              {isActive && (
-                <span className="ml-auto w-1.5 h-1.5 rounded-full bg-brand-500" />
-              )}
-            </button>
-          );
-        })}
+      {/* ── Navigation ───────────────────────────────────────── */}
+      <nav className="flex-1 flex flex-col min-h-0 space-y-4 overflow-hidden">
+
+        {/* ── Menu Section (Home + Search) ─────────────────── */}
+        <div className="flex-shrink-0">
+          <SectionLabel>Menu</SectionLabel>
+          <div className="space-y-0.5">
+            <NavItem id="home"   icon={Home}   label="Home"   activeTab={activeTab} setActiveTab={setActiveTab} />
+            <NavItem id="search" icon={Search} label="Search" activeTab={activeTab} setActiveTab={setActiveTab} />
+          </div>
+        </div>
+
+        {/* ── Library Section ──────────────────────────────── */}
+        <div className="flex-shrink-0">
+          <SectionLabel icon={Library}>Library</SectionLabel>
+          <div className="space-y-0.5">
+            <NavItem id="liked"           icon={Heart}      label="Liked Songs"      activeTab={activeTab} setActiveTab={setActiveTab} indent />
+            <NavItem id="recently-played" icon={Clock}      label="Recently Played"  activeTab={activeTab} setActiveTab={setActiveTab} indent />
+            <NavItem id="top-tracks"      icon={TrendingUp} label="Top Tracks"       activeTab={activeTab} setActiveTab={setActiveTab} indent />
+          </div>
+        </div>
+
+        {/* ── Playlists Section ────────────────────────────── */}
+        <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+          {/* Standard header for Playlists */}
+          <div className="flex items-center gap-2 text-xs font-semibold tracking-widest text-zinc-500 uppercase mb-2 px-3 w-full flex-shrink-0">
+            <div className="flex items-center gap-2">
+              <ListMusic className="w-4 h-4 flex-shrink-0" />
+              <span>Playlists</span>
+            </div>
+            
+            <div className="ml-auto flex items-center gap-2">
+              <button
+                id="sidebar-playlists-toggle"
+                onClick={() => setPlaylistsOpen(prev => !prev)}
+                className="w-5 h-5 flex items-center justify-center rounded-md text-zinc-500 hover:text-zinc-100 hover:bg-white/10 transition-colors"
+              >
+                <motion.div
+                  animate={{ rotate: playlistsOpen ? 0 : -90 }}
+                  transition={{ duration: 0.2, ease: 'easeInOut' }}
+                >
+                  <ChevronDown className="w-4 h-4" />
+                </motion.div>
+              </button>
+              <button
+                id="sidebar-add-playlist"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onAddPlaylist();
+                }}
+                title="Add Playlist"
+                className="w-5 h-5 flex items-center justify-center rounded-md text-zinc-500 hover:text-zinc-100 hover:bg-white/10 transition-all duration-150"
+              >
+                <Plus className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* Collapsible playlist items */}
+          <AnimatePresence initial={false}>
+            {playlistsOpen && (
+              <motion.div
+                key="playlist-items"
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
+                className="flex-1 flex flex-col min-h-0 overflow-hidden"
+              >
+                <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-transparent pr-2 space-y-0.5 pb-1">
+                  {!user ? (
+                    <p className="pl-[36px] pr-3 py-1.5 text-[11px] text-zinc-500 italic">
+                      Login to create playlists.
+                    </p>
+                  ) : isLoadingPlaylists ? (
+                    <p className="pl-[36px] pr-3 py-1.5 text-[11px] text-zinc-500 italic animate-pulse">
+                      Loading...
+                    </p>
+                  ) : playlists.length === 0 ? (
+                    <p className="pl-[36px] pr-3 py-1.5 text-[11px] text-zinc-500 italic">
+                      No playlists yet. Tap + to create one.
+                    </p>
+                  ) : (
+                    playlists.map(playlist => (
+                      <NavItem
+                        key={playlist.id}
+                        id={`playlist:${playlist.id}`}
+                        icon={ListMusic}
+                        label={playlist.name}
+                        activeTab={activeTab}
+                        setActiveTab={setActiveTab}
+                        indent
+                        coverUrl={playlist.cover_url || undefined}
+                      />
+                    ))
+                  )}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
       </nav>
 
-      {/* User Badge — bottom of sidebar */}
-      {/* DIVIDER: Garis yang adaptif, abu-abu lembut di Light Mode */}
-      <div className="mt-auto pt-4 border-t border-gray-200 dark:border-white/5">
+      {/* ── User Badge — bottom of sidebar ───────────────────── */}
+      <div className="flex-shrink-0 mt-auto pt-4 border-t border-gray-200 dark:border-white/5">
         <UserBadge setActiveTab={setActiveTab} />
       </div>
     </div>

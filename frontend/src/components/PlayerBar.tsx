@@ -1,7 +1,11 @@
-import { Play, Pause, SkipBack, SkipForward, Volume2, Repeat, Shuffle, Video, Loader2, Info, Mic2, Sparkles, ListMusic } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useState } from 'react';
+import { Play, Pause, SkipBack, SkipForward, Volume2, Repeat, Shuffle, Loader2, Mic2, ListMusic, Heart } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { main } from '../../wailsjs/go/models';
 import { fetchAPI } from '../lib/fetchAPI';
+import { toggleFavorite } from '../lib/supabaseOps';
+import { useAuth } from '../contexts/AuthContext';
+import { useContextMenu } from '../contexts/ContextMenuContext';
 
 interface PlayerBarProps {
   currentSong: main.Song | main.SmartTrack | null;
@@ -27,6 +31,8 @@ interface PlayerBarProps {
   isRepeat: boolean;
   setIsRepeat: (r: boolean) => void;
   onNavigateToArtist?: (artistId: number, artistName: string, genre?: string) => void;
+  isFavorited: boolean;
+  onToggleFavorite: (nowFavorited: boolean) => void;
 }
 
 export default function PlayerBar({ 
@@ -53,7 +59,65 @@ export default function PlayerBar({
   isRepeat,
   setIsRepeat,
   onNavigateToArtist,
+  isFavorited,
+  onToggleFavorite,
 }: PlayerBarProps) {
+  const { user, refreshFavorites } = useAuth();
+  const { openContextMenu } = useContextMenu();
+  const [isTogglingFav, setIsTogglingFav] = useState(false);
+
+  const handleToggleFavorite = async () => {
+    // ── Pre-flight guard ────────────────────────────────────────────
+    console.group('[PlayerBar] ❤️  handleToggleFavorite');
+
+    if (!currentSong) {
+      console.warn('  ⛔ No currentSong — aborting');
+      console.groupEnd();
+      return;
+    }
+    if (isTogglingFav) {
+      console.warn('  ⛔ Already toggling — aborting (prevents double-click)');
+      console.groupEnd();
+      return;
+    }
+    if (!user) {
+      console.warn('  ⛔ user is NULL — not logged in. Button should be disabled.');
+      console.groupEnd();
+      return;
+    }
+
+    // ── Log song data ───────────────────────────────────────────────
+    console.log('  Song ID    :', currentSong.id);
+    console.log('  Song Title :', currentSong.title);
+    console.log('  Song Artist:', currentSong.artist);
+    console.log('  user.id    :', user.id);
+    console.log('  user.email :', user.email);
+    console.log('  isFavorited:', isFavorited);
+
+    setIsTogglingFav(true);
+    try {
+      // toggleFavorite uses supabase-js directly (session token auto-attached)
+      const nowFavorited = await toggleFavorite({
+        userId: user.id,
+        trackId: currentSong.id,
+        title: currentSong.title,
+        artist: currentSong.artist,
+        artworkUrl: currentSong.coverArt ?? '',
+        album: (currentSong as any).album ?? '',
+      });
+      console.log('[PlayerBar] toggleFavorite SUCCESS → nowFavorited:', nowFavorited);
+      onToggleFavorite(nowFavorited);
+      // Sync AuthContext in-memory favorites cache
+      await refreshFavorites();
+    } catch (err: any) {
+      console.error('[PlayerBar] toggleFavorite FAILED:', err?.message ?? err);
+    } finally {
+      // CRITICAL: always reset — prevents permanently stuck button
+      setIsTogglingFav(false);
+      console.groupEnd();
+    }
+  };
+
   
   const togglePlay = () => {
     if (!audioRef.current || !currentSong || streamLoading) return;
@@ -89,7 +153,20 @@ export default function PlayerBar({
       {/* Current Song Info */}
       <div className="flex items-center space-x-4 w-1/3">
         {currentSong ? (
-          <div className="relative group">
+          <div
+            className="relative group cursor-context-menu"
+            onContextMenu={(e) => {
+              if (!currentSong) return;
+              e.preventDefault();
+              openContextMenu(e.clientX, e.clientY, {
+                id: currentSong.id,
+                title: currentSong.title,
+                artist: currentSong.artist,
+                album: (currentSong as any).album ?? '',
+                coverArt: currentSong.coverArt ?? '',
+              });
+            }}
+          >
             {(isHighQuality || streamLoading) && (
               <div className={`absolute -inset-1 bg-red-500/30 rounded-xl blur-md transition-opacity duration-500 
                 ${streamLoading ? 'animate-glow-pulse' : 'opacity-100'}`} 
@@ -158,6 +235,41 @@ export default function PlayerBar({
             </span>
           )}
         </div>
+
+        {/* Heart / Favorite button */}
+        <motion.button
+          id="playerbar-favorite-btn"
+          onClick={handleToggleFavorite}
+          disabled={!currentSong || isTogglingFav || !user}
+          whileTap={user && currentSong ? { scale: 0.82 } : {}}
+          animate={isFavorited ? { scale: [1, 1.3, 1] } : { scale: 1 }}
+          transition={{ duration: 0.3 }}
+          title={
+            !user
+              ? 'Login untuk menyimpan lagu'
+              : !currentSong
+              ? 'Tidak ada lagu yang diputar'
+              : isFavorited
+              ? 'Hapus dari Liked Songs'
+              : 'Tambah ke Liked Songs'
+          }
+          className={`ml-3 flex-shrink-0 transition-colors duration-200
+            ${
+              !user || !currentSong
+                ? 'text-gray-300 dark:text-gray-700 cursor-not-allowed opacity-40'
+                : isTogglingFav
+                ? 'cursor-wait opacity-60'
+                : isFavorited
+                ? 'text-brand-500 dark:text-brand-400 cursor-pointer'
+                : 'text-gray-400 dark:text-gray-500 hover:text-brand-500 dark:hover:text-brand-400 cursor-pointer'
+            }`}
+        >
+          <Heart
+            className={`w-4 h-4 transition-all duration-200 ${
+              isFavorited ? 'fill-current' : ''
+            } ${isTogglingFav ? 'animate-pulse' : ''}`}
+          />
+        </motion.button>
       </div>
 
       {/* Controls */}

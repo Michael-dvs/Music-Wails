@@ -9,7 +9,10 @@ import (
 	"math/rand"
 	"net/http"
 	"net/url"
+	"log"
+	"html"
 	"os"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -36,12 +39,17 @@ type lyricsCacheEntry struct {
 
 // App struct
 type App struct {
-	ctx          context.Context
-	lyricsCache  sync.Map // map[string]lyricsCacheEntry — TTL 60s
-	sbURL        string   // Supabase project URL
-	sbAnonKey        string   // publishable key (for user-scoped requests)
-	sbServiceKey     string   // secret key (for admin operations)
-	currentUserToken string   // currently active user session token
+	ctx                context.Context
+	lyricsCache        sync.Map // map[string]lyricsCacheEntry — TTL 60s
+	sbURL              string   // Supabase project URL
+	sbAnonKey          string   // publishable key (for user-scoped requests)
+	sbServiceKey       string   // secret key (for admin operations)
+	currentUserToken   string   // currently active user session token
+	recentlyPlayedPath string   // absolute path to recently_played.json
+
+	// OAuth local-server fields
+	oauthMu  sync.Mutex   // guards oauthSrv
+	oauthSrv *http.Server // non-nil while a login is in progress
 }
 
 // NewApp creates a new App application struct
@@ -64,6 +72,19 @@ func getEnv(key, fallback string) string {
 // startup is called when the app starts.
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+
+	// ── Resolve local data directory for recently_played.json ──
+	configDir, err := os.UserConfigDir()
+	if err != nil {
+		// Fallback to current working dir if UserConfigDir unavailable
+		configDir, _ = os.Getwd()
+	}
+	appDataDir := configDir + string(os.PathSeparator) + "Music-Wails"
+	if mkErr := os.MkdirAll(appDataDir, 0755); mkErr != nil {
+		log.Printf("[startup] Could not create app data dir: %v", mkErr)
+	}
+	a.recentlyPlayedPath = appDataDir + string(os.PathSeparator) + "recently_played.json"
+	log.Printf("[startup] Recently played cache: %s", a.recentlyPlayedPath)
 }
 
 // ─────────────────────────────────────────────
@@ -92,6 +113,16 @@ type FavoriteTrack struct {
 	AddedAt        string `json:"added_at"`
 }
 
+// RecentlyPlayedEntry represents a single local play history record
+type RecentlyPlayedEntry struct {
+	TrackID  string `json:"track_id"`
+	Title    string `json:"title"`
+	Artist   string `json:"artist"`
+	Album    string `json:"album"`
+	CoverURL string `json:"cover_url"`
+	PlayedAt string `json:"played_at"`
+}
+
 // HomeSettingRow mirrors 'home_settings' table
 type HomeSettingRow struct {
 	ID           string `json:"id"`
@@ -107,6 +138,93 @@ type AuthUserInfo struct {
 	ID    string `json:"id"`
 	Email string `json:"email"`
 	Role  string `json:"role"`
+}
+
+// ─────────────────────────────────────────────
+//  LOCAL RECENTLY PLAYED (JSON FILE CACHE)
+// ─────────────────────────────────────────────
+
+const maxRecentlyPlayed = 50
+
+// LogSongPlay writes a play event to the local recently_played.json file.
+// It deduplicates by track_id (moves existing entry to top), and caps at 50 entries.
+// This is fire-and-forget safe: any error is logged but never returned.
+func (a *App) LogSongPlay(trackID, title, artist, album, coverURL string) {
+	if a.recentlyPlayedPath == "" {
+		log.Println("[LogSongPlay] Path not initialised — skipping")
+		return
+	}
+
+	log.Printf("[LogSongPlay] Recording: %s – %s", artist, title)
+
+	// Read existing history
+	var history []RecentlyPlayedEntry
+	if raw, err := os.ReadFile(a.recentlyPlayedPath); err == nil {
+		if jsonErr := json.Unmarshal(raw, &history); jsonErr != nil {
+			log.Printf("[LogSongPlay] JSON parse error (starting fresh): %v", jsonErr)
+			history = []RecentlyPlayedEntry{}
+		}
+	}
+
+	// Remove duplicate by trackID (so it moves to front)
+	filtered := history[:0]
+	for _, e := range history {
+		if e.TrackID != trackID {
+			filtered = append(filtered, e)
+		}
+	}
+
+	// Prepend new entry
+	newEntry := RecentlyPlayedEntry{
+		TrackID:  trackID,
+		Title:    title,
+		Artist:   artist,
+		Album:    album,
+		CoverURL: coverURL,
+		PlayedAt: time.Now().UTC().Format(time.RFC3339),
+	}
+	history = append([]RecentlyPlayedEntry{newEntry}, filtered...)
+
+	// Cap at maxRecentlyPlayed
+	if len(history) > maxRecentlyPlayed {
+		history = history[:maxRecentlyPlayed]
+	}
+
+	// Write back to disk
+	encoded, err := json.MarshalIndent(history, "", "  ")
+	if err != nil {
+		log.Printf("[LogSongPlay] JSON encode error: %v", err)
+		return
+	}
+	if err := os.WriteFile(a.recentlyPlayedPath, encoded, 0644); err != nil {
+		log.Printf("[LogSongPlay] Write error: %v", err)
+		return
+	}
+	log.Printf("[LogSongPlay] ✅ Saved %d entries to cache", len(history))
+}
+
+// GetRecentlyPlayed reads the local recently_played.json and returns up to 50 entries.
+func (a *App) GetRecentlyPlayed() ([]RecentlyPlayedEntry, error) {
+	if a.recentlyPlayedPath == "" {
+		return []RecentlyPlayedEntry{}, nil
+	}
+
+	raw, err := os.ReadFile(a.recentlyPlayedPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// No history yet — return empty slice, not an error
+			return []RecentlyPlayedEntry{}, nil
+		}
+		return nil, fmt.Errorf("[GetRecentlyPlayed] read failed: %v", err)
+	}
+
+	var history []RecentlyPlayedEntry
+	if err := json.Unmarshal(raw, &history); err != nil {
+		return nil, fmt.Errorf("[GetRecentlyPlayed] JSON parse failed: %v", err)
+	}
+
+	log.Printf("[GetRecentlyPlayed] Returning %d entries", len(history))
+	return history, nil
 }
 
 // ─────────────────────────────────────────────
@@ -137,6 +255,10 @@ func (a *App) sbRequest(method, path, bearerToken string, body interface{}) (*ht
 
 	req.Header.Set("apikey", a.sbAnonKey)
 	req.Header.Set("Content-Type", "application/json")
+	// Tell Supabase to return the inserted/updated row(s) in the response body
+	if method == "POST" || method == "PATCH" {
+		req.Header.Set("Prefer", "return=representation")
+	}
 	if bearerToken != "" {
 		req.Header.Set("Authorization", "Bearer "+bearerToken)
 	} else if a.currentUserToken != "" {
@@ -147,6 +269,7 @@ func (a *App) sbRequest(method, path, bearerToken string, body interface{}) (*ht
 
 	client := &http.Client{Timeout: 10 * time.Second}
 	return client.Do(req)
+
 
 	
 }
@@ -320,7 +443,256 @@ func (a *App) UpdateHomeContent(token string, row HomeSettingRow) error {
 }
 
 
+// ─────────────────────────────────────────────
+//  PLAY HISTORY — now handled via local JSON file
+//  See LogSongPlay() and GetRecentlyPlayed() above
+// ─────────────────────────────────────────────
+
+
+
+// ToggleFavorite checks if a track is already in user_favorites.
+// If NOT present → INSERT (like). If already present → DELETE (unlike).
+// Returns true if the track is now favorited, false if it was removed.
+// NOTE: Primary call is now from React via supabaseOps.toggleFavorite().
+func (a *App) ToggleFavorite(songID, trackTitle, artist, coverURL string) (bool, error) {
+	log.Printf("[ToggleFavorite] START — songID=%q title=%q token_set=%v", songID, trackTitle, a.currentUserToken != "")
+
+	if a.currentUserToken == "" {
+		log.Printf("[ToggleFavorite] ❌ ABORT — currentUserToken is empty (user not authenticated to Go backend)")
+		return false, fmt.Errorf("not authenticated — call SetUserToken first")
+	}
+
+	// 1. Check if the track already exists in user_favorites
+	checkPath := "/rest/v1/user_favorites?select=id&itunes_track_id=eq." + url.QueryEscape(songID)
+	log.Printf("[ToggleFavorite] Checking existence: GET %s", checkPath)
+	checkResp, err := a.sbRequest("GET", checkPath, a.currentUserToken, nil)
+	if err != nil {
+		log.Printf("[ToggleFavorite] ❌ Check request failed: %v", err)
+		return false, fmt.Errorf("ToggleFavorite check: %w", err)
+	}
+	defer checkResp.Body.Close()
+	log.Printf("[ToggleFavorite] Check status: %d", checkResp.StatusCode)
+
+	var existing []struct {
+		ID string `json:"id"`
+	}
+	if err := json.NewDecoder(checkResp.Body).Decode(&existing); err != nil {
+		log.Printf("[ToggleFavorite] ❌ Decode check response failed: %v", err)
+		return false, fmt.Errorf("ToggleFavorite decode: %w", err)
+	}
+
+	// 2a. Already favorited → DELETE (unlike)
+	if len(existing) > 0 {
+		delPath := "/rest/v1/user_favorites?itunes_track_id=eq." + url.QueryEscape(songID)
+		log.Printf("[ToggleFavorite] Track exists — DELETE %s", delPath)
+		delResp, err := a.sbRequest("DELETE", delPath, a.currentUserToken, nil)
+		if err != nil {
+			log.Printf("[ToggleFavorite] ❌ Delete failed: %v", err)
+			return false, fmt.Errorf("ToggleFavorite delete: %w", err)
+		}
+		defer delResp.Body.Close()
+		if delResp.StatusCode >= 300 {
+			log.Printf("[ToggleFavorite] ❌ Delete status %d", delResp.StatusCode)
+			return false, fmt.Errorf("ToggleFavorite delete: status %d", delResp.StatusCode)
+		}
+		log.Printf("[ToggleFavorite] ✅ Removed from favorites (status %d)", delResp.StatusCode)
+		return false, nil // now un-favorited
+	}
+
+	// 2b. Not favorited → INSERT (like)
+	body := map[string]interface{}{
+		"itunes_track_id": songID,
+		"title":           trackTitle,
+		"artist":          artist,
+		"album":           "",
+		"artwork_url":     coverURL,
+		"preview_url":     "",
+	}
+	log.Printf("[ToggleFavorite] Track not found — INSERT")
+	addResp, err := a.sbRequest("POST", "/rest/v1/user_favorites", a.currentUserToken, body)
+	if err != nil {
+		log.Printf("[ToggleFavorite] ❌ Insert failed: %v", err)
+		return false, fmt.Errorf("ToggleFavorite insert: %w", err)
+	}
+	defer addResp.Body.Close()
+	if addResp.StatusCode >= 300 {
+		log.Printf("[ToggleFavorite] ❌ Insert status %d", addResp.StatusCode)
+		return false, fmt.Errorf("ToggleFavorite insert: status %d", addResp.StatusCode)
+	}
+	log.Printf("[ToggleFavorite] ✅ Added to favorites (status %d)", addResp.StatusCode)
+	return true, nil // now favorited
+}
+
+// SetUserToken is called by React (AuthContext) whenever the Supabase session
+// changes (sign-in, sign-out, token refresh). This syncs the JWT to Go so
+// all Supabase REST calls (LogSongPlay, ToggleFavorite, etc.) are properly
+// authenticated and pass RLS policies.
+//
+// Call this from AuthContext's onAuthStateChange listener:
+//   SetUserToken(session?.access_token ?? "")
+func (a *App) SetUserToken(token string) {
+	a.currentUserToken = token
+	if token != "" {
+		fmt.Println("[Auth] ✅ Go backend: user token updated — Supabase calls now authenticated")
+	} else {
+		fmt.Println("[Auth] ⚠️  Go backend: user token cleared — user signed out")
+	}
+}
+
+// ─────────────────────────────────────────────
+//  PLAYLISTS
+// ─────────────────────────────────────────────
+
+// PlaylistRow mirrors the 'playlists' table
+type PlaylistRow struct {
+	ID        string `json:"id"`
+	UserID    string `json:"user_id"`
+	Name      string `json:"name"`
+	CoverURL  string `json:"cover_url"`
+	CreatedAt string `json:"created_at"`
+}
+
+// PlaylistTrackRow mirrors the 'playlist_tracks' table
+type PlaylistTrackRow struct {
+	ID         string `json:"id"`
+	PlaylistID string `json:"playlist_id"`
+	TrackID    string `json:"track_id"`
+	Title      string `json:"title"`
+	Artist     string `json:"artist"`
+	Album      string `json:"album"`
+	CoverURL   string `json:"cover_url"`
+	AddedAt    string `json:"added_at"`
+	Duration   int    `json:"duration"`    // duration in ms
+	OrderIndex int    `json:"order_index"`  // sorting order index
+}
+
+// CreatePlaylist creates a new named playlist for the current user.
+// Returns the newly created playlist row (with generated UUID).
+func (a *App) CreatePlaylist(name string) (PlaylistRow, error) {
+	if a.currentUserToken == "" {
+		return PlaylistRow{}, fmt.Errorf("not authenticated")
+	}
+	if name == "" {
+		return PlaylistRow{}, fmt.Errorf("playlist name cannot be empty")
+	}
+
+	body := map[string]interface{}{
+		"name": name,
+	}
+
+	// Prefer=return=representation so Supabase returns the inserted row
+	path := "/rest/v1/playlists"
+	resp, err := a.sbRequest("POST", path, a.currentUserToken, body)
+	if err != nil {
+		return PlaylistRow{}, fmt.Errorf("CreatePlaylist: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 300 {
+		return PlaylistRow{}, fmt.Errorf("CreatePlaylist: status %d", resp.StatusCode)
+	}
+
+	var rows []PlaylistRow
+	if err := json.NewDecoder(resp.Body).Decode(&rows); err != nil || len(rows) == 0 {
+		// Supabase by default doesn't return body unless Prefer header is set.
+		// Return a minimal row in that case.
+		return PlaylistRow{Name: name}, nil
+	}
+	return rows[0], nil
+}
+
+// GetPlaylists returns all playlists owned by the current user.
+func (a *App) GetPlaylists() ([]PlaylistRow, error) {
+	if a.currentUserToken == "" {
+		return []PlaylistRow{}, nil
+	}
+
+	resp, err := a.sbRequest("GET", "/rest/v1/playlists?select=*&order=created_at.desc", a.currentUserToken, nil)
+	if err != nil {
+		return nil, fmt.Errorf("GetPlaylists: %w", err)
+	}
+	defer resp.Body.Close()
+
+	var rows []PlaylistRow
+	if err := json.NewDecoder(resp.Body).Decode(&rows); err != nil {
+		return nil, fmt.Errorf("GetPlaylists: decode: %w", err)
+	}
+	return rows, nil
+}
+
+// AddTrackToPlaylist inserts a track into a specific playlist.
+// Uses ON CONFLICT DO NOTHING (via the unique index) to prevent duplicates.
+func (a *App) AddTrackToPlaylist(playlistID, trackID, title, artist, album, coverURL string) error {
+	if a.currentUserToken == "" {
+		return fmt.Errorf("not authenticated")
+	}
+
+	body := map[string]interface{}{
+		"playlist_id": playlistID,
+		"track_id":    trackID,
+		"title":       title,
+		"artist":      artist,
+		"album":       album,
+		"cover_url":   coverURL,
+	}
+
+	// Prefer: resolution=ignore-duplicates prevents error on duplicate (track already in playlist)
+	resp, err := a.sbRequest("POST", "/rest/v1/playlist_tracks", a.currentUserToken, body)
+	if err != nil {
+		return fmt.Errorf("AddTrackToPlaylist: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 300 {
+		return fmt.Errorf("AddTrackToPlaylist: status %d", resp.StatusCode)
+	}
+	return nil
+}
+
+// GetPlaylistTracks returns all tracks in a specific playlist.
+func (a *App) GetPlaylistTracks(playlistID string) ([]PlaylistTrackRow, error) {
+	if a.currentUserToken == "" {
+		return []PlaylistTrackRow{}, nil
+	}
+
+	path := "/rest/v1/playlist_tracks?select=*&playlist_id=eq." + url.QueryEscape(playlistID) + "&order=order_index.asc.nullslast,added_at.asc"
+	resp, err := a.sbRequest("GET", path, a.currentUserToken, nil)
+	if err != nil {
+		return nil, fmt.Errorf("GetPlaylistTracks: %w", err)
+	}
+	defer resp.Body.Close()
+
+	var tracks []PlaylistTrackRow
+	if err := json.NewDecoder(resp.Body).Decode(&tracks); err != nil {
+		return nil, fmt.Errorf("GetPlaylistTracks: decode: %w", err)
+	}
+	return tracks, nil
+}
+
+// DeletePlaylist removes a playlist and all its tracks (CASCADE).
+func (a *App) DeletePlaylist(playlistID string) error {
+	if a.currentUserToken == "" {
+		return fmt.Errorf("not authenticated")
+	}
+
+	path := "/rest/v1/playlists?id=eq." + url.QueryEscape(playlistID)
+	resp, err := a.sbRequest("DELETE", path, a.currentUserToken, nil)
+	if err != nil {
+		return fmt.Errorf("DeletePlaylist: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		return fmt.Errorf("DeletePlaylist: status %d", resp.StatusCode)
+	}
+	return nil
+}
+
+
 const oauthCallbackPort = 54321
+
+// oauthCallbackAddr is the canonical redirect URI — always 127.0.0.1, never localhost,
+// to avoid IPv6 resolution issues on Windows.
+const oauthCallbackAddr = "127.0.0.1"
 
 // oauthResult carries tokens (or an error) from the local HTTP callback
 type oauthResult struct {
@@ -331,13 +703,25 @@ type oauthResult struct {
 
 // StartGoogleLogin opens the system browser for Google OAuth and
 // starts a temporary local server to capture the Supabase callback.
-// This is non-blocking — the result arrives via Wails event "auth:google:success".
+// Non-blocking: the result arrives via Wails event "login-success" or "auth:google:error".
+// Safe to call multiple times — if a server is already running, it is reused.
 func (a *App) StartGoogleLogin() error {
 	if a.sbURL == "" || a.sbURL == "YOUR_SUPABASE" {
 		return fmt.Errorf("SUPABASE_URL not configured — edit .env dan restart")
 	}
 
-	redirectTo := fmt.Sprintf("http://localhost:%d/callback", oauthCallbackPort)
+	// ── Guard: kill any zombie server before starting a fresh one ──────────
+	a.oauthMu.Lock()
+	if a.oauthSrv != nil {
+		// Previous server still running — shut it down so we get a clean start
+		ctxShut, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		_ = a.oauthSrv.Shutdown(ctxShut)
+		cancel()
+		a.oauthSrv = nil
+	}
+	a.oauthMu.Unlock()
+
+	redirectTo := fmt.Sprintf("http://%s:%d/callback", oauthCallbackAddr, oauthCallbackPort)
 
 	authURL := fmt.Sprintf(
 		"%s/auth/v1/authorize?provider=google&redirect_to=%s",
@@ -345,223 +729,147 @@ func (a *App) StartGoogleLogin() error {
 		url.QueryEscape(redirectTo),
 	)
 
-	// Start the local callback server
+	// Start the local callback server (stores srv reference in a.oauthSrv)
 	resultCh, stopServer := a.startOAuthCallbackServer()
 
 	// Open system browser (Chrome, Edge, Firefox — whatever the OS default is)
 	runtime.BrowserOpenURL(a.ctx, authURL)
 
-	// Wait for callback asynchronously — don't block the UI
+	// Wait for callback asynchronously
 	go func() {
+		// Wait for either the error channel or timeout
+		// We no longer rely on resultCh for success, as success is emitted directly via "oauth-raw-url"
 		select {
 		case res := <-resultCh:
-			stopServer() // shut down the HTTP server
+			stopServer() // shut down the HTTP server gracefully
 			if res.Error != "" {
 				runtime.EventsEmit(a.ctx, "auth:google:error", res.Error)
-				return
 			}
-			// Success — save token to Go backend instance and emit event
-			a.currentUserToken = res.AccessToken
-			runtime.EventsEmit(a.ctx, "login-success", map[string]string{
-				"access_token":  res.AccessToken,
-				"refresh_token": res.RefreshToken,
-			})
-
-		case <-time.After(10 * time.Minute):
+		case <-time.After(3 * time.Minute):
 			stopServer()
-			runtime.EventsEmit(a.ctx, "auth:google:error", "Login timeout setelah 10 menit.")
+			runtime.EventsEmit(a.ctx, "auth:google:error", "Login timeout setelah 3 menit.")
 		}
 	}()
 
 	return nil
 }
 
-// startOAuthCallbackServer starts a local HTTP server on :54321.
+// startOAuthCallbackServer starts a local HTTP server on 127.0.0.1:54321.
 // Returns a channel that delivers the result and a stop function.
+// The server reference is stored in a.oauthSrv for lifecycle management.
 func (a *App) startOAuthCallbackServer() (<-chan oauthResult, func()) {
 	resultCh := make(chan oauthResult, 1)
+	// wg tracks in-flight goroutines (e.g. PKCE exchange) so shutdown waits for them
+	var wg sync.WaitGroup
 
 	// ── Callback page: returns HTML that reads the URL fragment via JS ──
-	callbackHTML := fmt.Sprintf(`<!DOCTYPE html>
-<html lang="id">
+	callbackHTML := `<!DOCTYPE html>
+<html lang="id" class="h-full">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Music-Wails — Autentikasi</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-  <style>
-    :root {
-      --bg-color: #0c0c0c;
-      --card-bg: #1c1c1e;
-      --text-main: #f5f5f7;
-      --text-muted: #8e8e93;
-      --accent: #FA243C; /* Apple Music Red */
-      --success: #34c759;
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              DEFAULT: '#FA243C',
+            }
+          }
+        }
+      }
     }
-    
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    
-    body {
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif;
-      background-color: var(--bg-color);
-      color: var(--text-main);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      height: 100vh;
-      overflow: hidden;
-    }
-
-    .card {
-      background: var(--card-bg);
-      border: 1px solid rgba(255, 255, 255, 0.05);
-      border-radius: 24px;
-      padding: 40px 32px;
-      width: 100%;
-      max-width: 360px;
-      text-align: center;
-      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
-      animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-    }
-
-    .icon-container {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 64px;
-      margin-bottom: 24px;
-    }
-
-    /* Ikon SVG Styles */
-    svg { width: 48px; height: 48px; }
-    
-    .spinner {
-      stroke: var(--text-muted);
-      animation: spin 1s linear infinite;
-    }
-    
-    .success-icon {
-      stroke: var(--success);
-      animation: scaleIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-      display: none;
-    }
-    
-    .error-icon {
-      stroke: var(--accent);
-      animation: scaleIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-      display: none;
-    }
-
-    h2 {
-      font-size: 20px;
-      font-weight: 600;
-      letter-spacing: -0.02em;
-      margin-bottom: 8px;
-    }
-
-    p {
-      color: var(--text-muted);
-      font-size: 14px;
-      line-height: 1.5;
-    }
-
-    /* Keyframes */
-    @keyframes spin { 100% { transform: rotate(360deg); } }
-    @keyframes slideUp {
-      0% { opacity: 0; transform: translateY(20px); }
-      100% { opacity: 1; transform: translateY(0); }
-    }
-    @keyframes scaleIn {
-      0% { opacity: 0; transform: scale(0.5); }
-      100% { opacity: 1; transform: scale(1); }
-    }
-  </style>
+  </script>
 </head>
-<body>
+<body class="bg-zinc-950 text-zinc-100 flex items-center justify-center min-h-screen p-4 select-none font-sans overflow-hidden">
+  
+  <!-- Outer Glow Effect -->
+  <div class="absolute w-96 h-96 rounded-full bg-red-500/10 blur-[128px] top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none"></div>
 
-  <div class="card">
-    <div class="icon-container" id="icon-wrapper">
-      <svg class="spinner" id="icon-loading" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M21 12a9 9 0 1 1-6.219-8.56"></path>
-      </svg>
-      <svg class="success-icon" id="icon-success" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-        <polyline points="22 4 12 14.01 9 11.01"></polyline>
-      </svg>
-      <svg class="error-icon" id="icon-error" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="12" cy="12" r="10"></circle>
-        <line x1="15" y1="9" x2="9" y2="15"></line>
-        <line x1="9" y1="9" x2="15" y2="15"></line>
-      </svg>
+  <div class="relative bg-zinc-900/40 border border-zinc-800/80 backdrop-blur-md rounded-3xl p-8 max-w-sm w-full text-center shadow-2xl transition-all duration-500 transform scale-100">
+    
+    <!-- State Icons Wrapper -->
+    <div class="flex justify-center items-center h-20 mb-6 relative">
+      
+      <!-- Loading State: Spinner -->
+      <div id="icon-loading" class="flex items-center justify-center">
+        <svg class="animate-spin text-red-500 w-12 h-12" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+      </div>
+
+      <!-- Success State: Green Check -->
+      <div id="icon-success" class="hidden flex items-center justify-center">
+        <div class="rounded-full bg-emerald-500/10 p-3 border border-emerald-500/20">
+          <svg class="text-emerald-500 w-10 h-10 stroke-[2.5]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+        </div>
+      </div>
+
+      <!-- Error State: Red Cross -->
+      <div id="icon-error" class="hidden flex items-center justify-center">
+        <div class="rounded-full bg-red-500/10 p-3 border border-red-500/20">
+          <svg class="text-red-500 w-10 h-10 stroke-[2.5]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </div>
+      </div>
+
     </div>
     
-    <h2 id="title">Mengautentikasi...</h2>
-    <p id="msg">Menghubungkan dengan aman ke akun Google Anda.</p>
+    <h2 id="title" class="text-xl font-bold text-zinc-100 tracking-tight mb-2">Menyelesaikan Autentikasi...</h2>
+    <p id="status-text" class="text-sm text-zinc-400 leading-relaxed px-2">Menghubungkan sesi Google Anda dengan aplikasi Music-Wails secara aman.</p>
   </div>
 
   <script>
-  (function() {
-    var hashParams  = new URLSearchParams(window.location.hash.slice(1));
-    var queryParams = new URLSearchParams(window.location.search);
+    async function sendToken() {
+      const iconLoading = document.getElementById('icon-loading');
+      const iconSuccess = document.getElementById('icon-success');
+      const iconError = document.getElementById('icon-error');
+      const titleText = document.getElementById('title');
+      const statusText = document.getElementById('status-text');
 
-    var accessToken  = hashParams.get('access_token')  || queryParams.get('access_token');
-    var refreshToken = hashParams.get('refresh_token') || queryParams.get('refresh_token') || '';
-    var code         = queryParams.get('code');
-    var err          = hashParams.get('error_description') || hashParams.get('error') ||
-                       queryParams.get('error_description') || queryParams.get('error');
+      try {
+        const response = await fetch('/process-url', {
+          method: 'POST',
+          body: window.location.href
+        });
 
-    function hideAllIcons() {
-      document.getElementById('icon-loading').style.display = 'none';
-      document.getElementById('icon-success').style.display = 'none';
-      document.getElementById('icon-error').style.display = 'none';
+        if (response.ok) {
+          iconLoading.classList.add('hidden');
+          iconSuccess.classList.remove('hidden');
+          
+          titleText.innerText = 'Autentikasi Berhasil!';
+          statusText.innerHTML = 'Anda sudah bisa kembali ke aplikasi <strong>Music-Wails</strong>.<br><span class="text-zinc-500 text-xs mt-2 block">Silakan tutup tab ini.</span>';
+        } else {
+          throw new Error('Server callback menolak permintaan autentikasi.');
+        }
+      } catch (err) {
+        console.error('Gagal mengirim token:', err);
+        iconLoading.classList.add('hidden');
+        iconError.classList.remove('hidden');
+        
+        titleText.innerText = 'Autentikasi Gagal';
+        statusText.innerText = 'Terjadi kesalahan saat sinkronisasi: ' + err.message;
+      }
     }
-
-    function showSuccess() {
-      hideAllIcons();
-      document.getElementById('icon-success').style.display = 'block';
-      document.getElementById('title').textContent = 'Autentikasi Berhasil';
-      document.getElementById('msg').textContent   = 'Anda sudah bisa kembali ke aplikasi. Tab ini akan tertutup otomatis.';
-      setTimeout(function() { window.close(); }, 3000);
-    }
-
-    function showError(msg) {
-      hideAllIcons();
-      document.getElementById('icon-error').style.display = 'block';
-      document.getElementById('title').textContent = 'Autentikasi Gagal';
-      document.getElementById('msg').textContent   = msg;
-    }
-
-    if (accessToken) {
-      fetch('http://localhost:%d/token', {
-        method:  'POST',
-        headers: {'Content-Type':'application/json'},
-        body:    JSON.stringify({access_token: accessToken, refresh_token: refreshToken})
-      }).then(showSuccess).catch(function(){ showSuccess(); });
-
-    } else if (code) {
-      fetch('http://localhost:%d/code', {
-        method:  'POST',
-        headers: {'Content-Type':'application/json'},
-        body:    JSON.stringify({code: code})
-      }).then(showSuccess).catch(function(){ showSuccess(); });
-
-    } else if (err) {
-      showError(err);
-      fetch('http://localhost:%d/error', {
-        method:  'POST',
-        headers: {'Content-Type':'application/json'},
-        body:    JSON.stringify({error: err})
-      }).catch(function(){});
-
-    } else {
-      showError('Sesi tidak valid atau tidak ada data login. Silakan coba lagi.');
-    }
-  })();
+    
+    sendToken();
   </script>
 </body>
-</html>`, oauthCallbackPort, oauthCallbackPort, oauthCallbackPort)
+</html>`
 
 	mux := http.NewServeMux()
 
@@ -572,99 +880,51 @@ func (a *App) startOAuthCallbackServer() (<-chan oauthResult, func()) {
 		fmt.Fprint(w, callbackHTML)
 	})
 
-	// /token — receives { access_token, refresh_token } from the HTML page JS
-	mux.HandleFunc("/token", func(w http.ResponseWriter, r *http.Request) {
+	// /process-url — receives the raw window.location.href string
+	mux.HandleFunc("/process-url", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodOptions {
 			w.Header().Set("Access-Control-Allow-Origin", "*")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 			w.WriteHeader(http.StatusOK)
 			return
 		}
-		var payload struct {
-			AccessToken  string `json:"access_token"`
-			RefreshToken string `json:"refresh_token"`
-		}
-		json.NewDecoder(r.Body).Decode(&payload)
 		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.WriteHeader(http.StatusOK)
-		// Non-blocking send — ignore if already sent
-		select {
-		case resultCh <- oauthResult{AccessToken: payload.AccessToken, RefreshToken: payload.RefreshToken}:
-		default:
-		}
-	})
 
-	// /code — receives { code } for PKCE flow; exchanges it for tokens
-	mux.HandleFunc("/code", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodOptions {
-			w.Header().Set("Access-Control-Allow-Origin", "*")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-			w.WriteHeader(http.StatusOK)
+		bodyBytes, err := io.ReadAll(r.Body)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		var payload struct{ Code string `json:"code"` }
-		json.NewDecoder(r.Body).Decode(&payload)
+		rawURL := string(bodyBytes)
 
-		w.Header().Set("Access-Control-Allow-Origin", "*")
+		// ── DUMB BRIDGE ──
+		// Just emit the raw URL string back to React so it can handle PKCE/Hash parsing
+		// via the official supabase-js SDK.
 		w.WriteHeader(http.StatusOK)
-
-		// Exchange code → tokens via Supabase REST
-		go func() {
-			body := map[string]interface{}{
-				"auth_code":    payload.Code,
-				"redirect_uri": fmt.Sprintf("http://localhost:%d/callback", oauthCallbackPort),
-			}
-			resp, err := a.sbRequest("POST", "/auth/v1/token?grant_type=pkce", "", body)
-			if err != nil {
-				select {
-				case resultCh <- oauthResult{Error: err.Error()}:
-				default:
-				}
-				return
-			}
-			defer resp.Body.Close()
-			var session struct {
-				AccessToken  string `json:"access_token"`
-				RefreshToken string `json:"refresh_token"`
-				Error        string `json:"error_description"`
-			}
-			json.NewDecoder(resp.Body).Decode(&session)
-			if session.Error != "" {
-				select {
-				case resultCh <- oauthResult{Error: session.Error}:
-				default:
-				}
-				return
-			}
-			select {
-			case resultCh <- oauthResult{AccessToken: session.AccessToken, RefreshToken: session.RefreshToken}:
-			default:
-			}
-		}()
-	})
-
-	// /error — receives error from the HTML page JS
-	mux.HandleFunc("/error", func(w http.ResponseWriter, r *http.Request) {
-		var payload struct{ Error string `json:"error"` }
-		json.NewDecoder(r.Body).Decode(&payload)
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.WriteHeader(http.StatusOK)
-		select {
-		case resultCh <- oauthResult{Error: payload.Error}:
-		default:
-		}
+		runtime.EventsEmit(a.ctx, "oauth-raw-url", rawURL)
 	})
 
 	srv := &http.Server{
-		Addr:    fmt.Sprintf(":%d", oauthCallbackPort),
+		Addr:    fmt.Sprintf("%s:%d", oauthCallbackAddr, oauthCallbackPort),
 		Handler: mux,
 	}
+
+	// Store server reference for lifecycle management
+	a.oauthMu.Lock()
+	a.oauthSrv = srv
+	a.oauthMu.Unlock()
+
 	go func() { _ = srv.ListenAndServe() }()
 
 	stop := func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		// Wait for any in-flight goroutines (e.g. PKCE exchange) to finish
+		wg.Wait()
+		ctxShut, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
-		_ = srv.Shutdown(ctx)
+		_ = srv.Shutdown(ctxShut)
+		a.oauthMu.Lock()
+		a.oauthSrv = nil
+		a.oauthMu.Unlock()
 	}
 
 	return resultCh, stop
@@ -740,6 +1000,116 @@ func (a *App) FetchExternalAPI(targetURL string) (string, error) {
 		return "", fmt.Errorf("FetchExternalAPI: read body: %w", err)
 	}
 	return string(body), nil
+}
+
+// ─────────────────────────────────────────────
+//  SPOTIFY ANONYMOUS IMPORTER
+// ─────────────────────────────────────────────
+
+// SpotifyTrack represents a track extracted from a Spotify playlist
+type SpotifyTrack struct {
+	Title    string `json:"title"`
+	Artist   string `json:"artist"`
+	CoverURL string `json:"coverUrl"`
+}
+
+// ScrapeSpotifyPlaylist extracts playlist tracks by scraping the Spotify embed HTML.
+func (a *App) ScrapeSpotifyPlaylist(spotifyURL string) ([]SpotifyTrack, error) {
+	// Example URL: https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M
+	// Or sometimes users paste with query params
+	
+	re := regexp.MustCompile(`/playlist/([a-zA-Z0-9]+)`)
+	matches := re.FindStringSubmatch(spotifyURL)
+	if len(matches) < 2 {
+		return nil, fmt.Errorf("URL Spotify tidak valid. Tidak dapat menemukan ID playlist.")
+	}
+	playlistID := matches[1]
+
+	embedURL := fmt.Sprintf("https://open.spotify.com/embed/playlist/%s", playlistID)
+	req, err := http.NewRequest("GET", embedURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("Gagal membuat request embed: %v", err)
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36")
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("Gagal mengambil halaman Spotify: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("Gagal mengambil halaman Spotify: HTTP %d", resp.StatusCode)
+	}
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("Gagal membaca respon HTML: %v", err)
+	}
+	bodyStr := string(bodyBytes)
+
+	// Regex for title
+	titleRe := regexp.MustCompile(`class="[^\"]*TracklistRow_title[^\"]*"[^>]*>([^<]+)</h3>`)
+	artistRe := regexp.MustCompile(`class="[^\"]*TracklistRow_subtitle[^\"]*"[^>]*>(?:<span[^>]*>[^<]*</span>)?([^<]+)</h4>`)
+
+	titles := titleRe.FindAllStringSubmatch(bodyStr, -1)
+	artists := artistRe.FindAllStringSubmatch(bodyStr, -1)
+
+	count := len(titles)
+	if len(artists) < count {
+		count = len(artists)
+	}
+
+	enrichedTracks := make([]SpotifyTrack, count)
+	var wg sync.WaitGroup
+
+	for i := 0; i < count; i++ {
+		// Clean up HTML entities like &#x27;
+		title := html.UnescapeString(titles[i][1])
+		artist := html.UnescapeString(artists[i][1])
+		// Artist often contains non-breaking spaces
+		artist = strings.ReplaceAll(artist, "\u00a0", " ")
+		
+		enrichedTracks[i] = SpotifyTrack{
+			Title:  title,
+			Artist: artist,
+			CoverURL: "",
+		}
+
+		wg.Add(1)
+		go func(idx int, t, a string) {
+			defer wg.Done()
+			
+			query := url.QueryEscape(t + " " + a)
+			apiURL := fmt.Sprintf("https://itunes.apple.com/search?term=%s&entity=song&limit=1", query)
+			
+			client := &http.Client{Timeout: 5 * time.Second}
+			resp, err := client.Get(apiURL)
+			if err == nil && resp.StatusCode == http.StatusOK {
+				defer resp.Body.Close()
+				var result struct {
+					Results []struct {
+						TrackName      string `json:"trackName"`
+						ArtistName     string `json:"artistName"`
+						ArtworkUrl100  string `json:"artworkUrl100"`
+					} `json:"results"`
+				}
+				if err := json.NewDecoder(resp.Body).Decode(&result); err == nil && len(result.Results) > 0 {
+					// Use iTunes metadata if found
+					enrichedTracks[idx].Title = result.Results[0].TrackName
+					enrichedTracks[idx].Artist = result.Results[0].ArtistName
+					enrichedTracks[idx].CoverURL = upsizeArtwork(result.Results[0].ArtworkUrl100)
+				}
+			} else if resp != nil {
+				resp.Body.Close()
+			}
+		}(i, title, artist)
+	}
+
+	wg.Wait()
+
+	return enrichedTracks, nil
 }
 
 // upsizeArtwork converts iTunes 100x100 artwork URL to 600x600
@@ -1525,7 +1895,7 @@ func (a *App) BuildSmartQueue(seedArtist, seedTitle, seedGenre, excludeID, histo
 //  LYRICS
 // ─────────────────────────────────────────────
 
-// GetLyrics uses a 2-strategy approach: LrcLib /api/get (with duration) → /api/search
+// GetLyrics uses a 2-strategy approach: LrcLib /api/get (exact match) → /api/search (strict fallback filter)
 // Results are cached for 60 seconds to prevent API spam during frontend exponential backoff retries.
 func (a *App) GetLyrics(artist string, title string, durationSec int) LyricsResult {
 	// ── Cache check (TTL: 60 seconds) ──
@@ -1542,11 +1912,12 @@ func (a *App) GetLyrics(artist string, title string, durationSec int) LyricsResu
 
 	client := newHTTPClient()
 	userAgent := "VibeStream/1.0.0 (https://github.com/RFQA/Music-Wails)"
-	empty := LyricsResult{}
+	empty := LyricsResult{PlainLyrics: "[00:00.00] Lirik tidak ditemukan"}
 
-	// ── Strategy 1: Strict match with duration ──
-	getURL := fmt.Sprintf("https://lrclib.net/api/get?artist_name=%s&track_name=%s&duration=%d",
-		url.QueryEscape(artist), url.QueryEscape(title), durationSec)
+	// ── Strategy 1: Exact match API ──
+	// GET https://lrclib.net/api/get?track_name={cleanTitle}&artist_name={cleanArtist}
+	getURL := fmt.Sprintf("https://lrclib.net/api/get?track_name=%s&artist_name=%s",
+		url.QueryEscape(title), url.QueryEscape(artist))
 
 	req, _ := http.NewRequest("GET", getURL, nil)
 	req.Header.Set("User-Agent", userAgent)
@@ -1560,8 +1931,8 @@ func (a *App) GetLyrics(artist string, title string, durationSec int) LyricsResu
 		}
 		if err := json.NewDecoder(resp.Body).Decode(&r); err == nil {
 			resp.Body.Close()
-			if r.SyncedLyrics != "" {
-				fmt.Printf("[Lyrics] Smart match success: %s - %s\n", artist, title)
+			if r.SyncedLyrics != "" || r.PlainLyrics != "" {
+				fmt.Printf("[Lyrics] Exact match success: %s - %s\n", artist, title)
 				result := LyricsResult{SyncedLyrics: r.SyncedLyrics, PlainLyrics: r.PlainLyrics, LrcDuration: int(r.Duration)}
 				a.lyricsCache.Store(cacheKey, lyricsCacheEntry{result: result, cachedAt: time.Now()})
 				return result
@@ -1572,9 +1943,10 @@ func (a *App) GetLyrics(artist string, title string, durationSec int) LyricsResu
 		resp.Body.Close()
 	}
 
-	// ── Strategy 2: Fuzzy search fallback ──
-	fmt.Printf("[Lyrics] Smart match failed, falling back to search: %s - %s\n", artist, title)
-	searchURL := fmt.Sprintf("https://lrclib.net/api/search?q=%s", url.QueryEscape(artist+" "+title))
+	// ── Strategy 2: Search with Strict Fallback Filter ──
+	// GET https://lrclib.net/api/search?q={cleanTitle}+{cleanArtist}
+	fmt.Printf("[Lyrics] Exact match failed, trying search fallback: %s - %s\n", artist, title)
+	searchURL := fmt.Sprintf("https://lrclib.net/api/search?q=%s", url.QueryEscape(title+" "+artist))
 
 	req2, err := http.NewRequest("GET", searchURL, nil)
 	if err != nil {
@@ -1587,13 +1959,15 @@ func (a *App) GetLyrics(artist string, title string, durationSec int) LyricsResu
 		if resp2 != nil {
 			resp2.Body.Close()
 		}
-		// Cache the empty result for 10s to avoid hammering on a bad song
+		// Cache the empty result briefly (10s short TTL) so it retries soon
 		a.lyricsCache.Store(cacheKey, lyricsCacheEntry{result: empty, cachedAt: time.Now().Add(-50 * time.Second)})
 		return empty
 	}
 	defer resp2.Body.Close()
 
 	var results []struct {
+		TrackName    string  `json:"trackName"`
+		ArtistName   string  `json:"artistName"`
 		SyncedLyrics string  `json:"syncedLyrics"`
 		PlainLyrics  string  `json:"plainLyrics"`
 		Duration     float64 `json:"duration"`
@@ -1603,23 +1977,29 @@ func (a *App) GetLyrics(artist string, title string, durationSec int) LyricsResu
 		return empty
 	}
 
+	lowerCleanTitle := strings.ToLower(title)
+	lowerCleanArtist := strings.ToLower(artist)
+
 	for _, r := range results {
-		if r.SyncedLyrics != "" {
-			result := LyricsResult{SyncedLyrics: r.SyncedLyrics, PlainLyrics: r.PlainLyrics, LrcDuration: int(r.Duration)}
-			a.lyricsCache.Store(cacheKey, lyricsCacheEntry{result: result, cachedAt: time.Now()})
-			return result
+		rTrack := strings.ToLower(r.TrackName)
+		rArtist := strings.ToLower(r.ArtistName)
+
+		// Check if result[i].trackName contains cleanTitle AND result[i].artistName contains cleanArtist
+		if strings.Contains(rTrack, lowerCleanTitle) && strings.Contains(rArtist, lowerCleanArtist) {
+			if r.SyncedLyrics != "" || r.PlainLyrics != "" {
+				fmt.Printf("[Lyrics] Search strict match success: %s - %s (found %s - %s)\n", artist, title, r.ArtistName, r.TrackName)
+				result := LyricsResult{SyncedLyrics: r.SyncedLyrics, PlainLyrics: r.PlainLyrics, LrcDuration: int(r.Duration)}
+				a.lyricsCache.Store(cacheKey, lyricsCacheEntry{result: result, cachedAt: time.Now()})
+				return result
+			}
 		}
-	}
-	if len(results) > 0 && results[0].PlainLyrics != "" {
-		result := LyricsResult{PlainLyrics: results[0].PlainLyrics, LrcDuration: int(results[0].Duration)}
-		a.lyricsCache.Store(cacheKey, lyricsCacheEntry{result: result, cachedAt: time.Now()})
-		return result
 	}
 
 	// Cache the empty result briefly (10s short TTL) so it retries soon
 	a.lyricsCache.Store(cacheKey, lyricsCacheEntry{result: empty, cachedAt: time.Now().Add(-50 * time.Second)})
 	return empty
 }
+
 
 // GetTrackPulseDuration queries Last.fm for track tags to determine a simulated BPM,
 // then returns a CSS animation duration (in seconds) for a "pulse" effect synced to the genre.

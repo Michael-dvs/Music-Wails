@@ -5,6 +5,7 @@ import { SearchSongs } from '../../wailsjs/go/main/App';
 import { motion, AnimatePresence } from 'framer-motion';
 import { fetchAPI } from '../lib/fetchAPI';
 import AlbumDetail, { getAvatarColor, getInitials, getHighResArtwork } from './AlbumDetail';
+import { useContextMenu } from '../contexts/ContextMenuContext';
 
 const ANIMATED_PLACEHOLDERS = [
   'Cari lagu Tulus...',
@@ -68,6 +69,8 @@ export default function Search({
 
   // Local state to navigate to album detail within search tab
   const [selectedAlbum, setSelectedAlbum] = useState<any | null>(null);
+
+  const { openContextMenu } = useContextMenu();
 
   const handleArtistClick = useCallback((artist: ItunesArtist) => {
     if (onNavigateToArtist) {
@@ -380,6 +383,16 @@ export default function Search({
                   transition={{ delay: idx * 0.04, duration: 0.3 }}
                   key={song.id}
                   onClick={() => onPlaySong(song, [song], 'search')}
+                  onContextMenu={(e) => {
+                    openContextMenu(e.clientX, e.clientY, {
+                      id: song.id,
+                      title: song.title,
+                      artist: song.artist,
+                      album: song.album || '',
+                      coverArt: song.coverArt || '',
+                      previewUrl: song.streamUrl || '',
+                    });
+                  }}
                   className="group flex items-center space-x-4 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 border border-transparent hover:border-black/10 dark:border-white/10 p-3 rounded-xl cursor-pointer transition-all duration-300"
                 >
                   <div className="relative w-16 h-16 flex-shrink-0">

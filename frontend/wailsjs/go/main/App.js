@@ -6,12 +6,24 @@ export function AddFavorite(arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
   return window['go']['main']['App']['AddFavorite'](arg1, arg2, arg3, arg4, arg5, arg6, arg7);
 }
 
+export function AddTrackToPlaylist(arg1, arg2, arg3, arg4, arg5, arg6) {
+  return window['go']['main']['App']['AddTrackToPlaylist'](arg1, arg2, arg3, arg4, arg5, arg6);
+}
+
 export function BuildSmartQueue(arg1, arg2, arg3, arg4, arg5) {
   return window['go']['main']['App']['BuildSmartQueue'](arg1, arg2, arg3, arg4, arg5);
 }
 
 export function CheckAuthSession(arg1) {
   return window['go']['main']['App']['CheckAuthSession'](arg1);
+}
+
+export function CreatePlaylist(arg1) {
+  return window['go']['main']['App']['CreatePlaylist'](arg1);
+}
+
+export function DeletePlaylist(arg1) {
+  return window['go']['main']['App']['DeletePlaylist'](arg1);
 }
 
 export function FetchExternalAPI(arg1) {
@@ -38,6 +50,18 @@ export function GetPlaylist(arg1) {
   return window['go']['main']['App']['GetPlaylist'](arg1);
 }
 
+export function GetPlaylistTracks(arg1) {
+  return window['go']['main']['App']['GetPlaylistTracks'](arg1);
+}
+
+export function GetPlaylists() {
+  return window['go']['main']['App']['GetPlaylists']();
+}
+
+export function GetRecentlyPlayed() {
+  return window['go']['main']['App']['GetRecentlyPlayed']();
+}
+
 export function GetStreamURLAsync(arg1, arg2, arg3, arg4, arg5) {
   return window['go']['main']['App']['GetStreamURLAsync'](arg1, arg2, arg3, arg4, arg5);
 }
@@ -50,16 +74,32 @@ export function GetUserProfile(arg1) {
   return window['go']['main']['App']['GetUserProfile'](arg1);
 }
 
+export function LogSongPlay(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['App']['LogSongPlay'](arg1, arg2, arg3, arg4, arg5);
+}
+
 export function RemoveFavorite(arg1, arg2) {
   return window['go']['main']['App']['RemoveFavorite'](arg1, arg2);
+}
+
+export function ScrapeSpotifyPlaylist(arg1) {
+  return window['go']['main']['App']['ScrapeSpotifyPlaylist'](arg1);
 }
 
 export function SearchSongs(arg1) {
   return window['go']['main']['App']['SearchSongs'](arg1);
 }
 
+export function SetUserToken(arg1) {
+  return window['go']['main']['App']['SetUserToken'](arg1);
+}
+
 export function StartGoogleLogin() {
   return window['go']['main']['App']['StartGoogleLogin']();
+}
+
+export function ToggleFavorite(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['ToggleFavorite'](arg1, arg2, arg3, arg4);
 }
 
 export function UpdateHomeContent(arg1, arg2) {

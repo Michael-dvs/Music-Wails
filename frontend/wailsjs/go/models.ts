@@ -82,6 +82,78 @@ export namespace main {
 	        this.lrcDuration = source["lrcDuration"];
 	    }
 	}
+	export class PlaylistRow {
+	    id: string;
+	    user_id: string;
+	    name: string;
+	    cover_url: string;
+	    created_at: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new PlaylistRow(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.user_id = source["user_id"];
+	        this.name = source["name"];
+	        this.cover_url = source["cover_url"];
+	        this.created_at = source["created_at"];
+	    }
+	}
+	export class PlaylistTrackRow {
+	    id: string;
+	    playlist_id: string;
+	    track_id: string;
+	    title: string;
+	    artist: string;
+	    album: string;
+	    cover_url: string;
+	    added_at: string;
+	    duration: number;
+	    order_index: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new PlaylistTrackRow(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.playlist_id = source["playlist_id"];
+	        this.track_id = source["track_id"];
+	        this.title = source["title"];
+	        this.artist = source["artist"];
+	        this.album = source["album"];
+	        this.cover_url = source["cover_url"];
+	        this.added_at = source["added_at"];
+	        this.duration = source["duration"];
+	        this.order_index = source["order_index"];
+	    }
+	}
+	export class RecentlyPlayedEntry {
+	    track_id: string;
+	    title: string;
+	    artist: string;
+	    album: string;
+	    cover_url: string;
+	    played_at: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new RecentlyPlayedEntry(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.track_id = source["track_id"];
+	        this.title = source["title"];
+	        this.artist = source["artist"];
+	        this.album = source["album"];
+	        this.cover_url = source["cover_url"];
+	        this.played_at = source["played_at"];
+	    }
+	}
 	export class SmartTrack {
 	    id: string;
 	    title: string;
@@ -140,6 +212,22 @@ export namespace main {
 	        this.streamUrl = source["streamUrl"];
 	        this.duration = source["duration"];
 	        this.isRecommended = source["isRecommended"];
+	    }
+	}
+	export class SpotifyTrack {
+	    title: string;
+	    artist: string;
+	    coverUrl: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SpotifyTrack(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.title = source["title"];
+	        this.artist = source["artist"];
+	        this.coverUrl = source["coverUrl"];
 	    }
 	}
 	export class UserProfile {

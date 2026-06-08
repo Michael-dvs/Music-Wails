@@ -12,3 +12,6 @@ frontend/.env
 frontend/.env.local
 gemini.md
 claude.md
+
+docs
+spotify_dump.html

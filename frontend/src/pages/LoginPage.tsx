@@ -8,6 +8,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { StartGoogleLogin } from '../../wailsjs/go/main/App';
 import { EventsOn, EventsOff } from '../../wailsjs/runtime/runtime';
+import { supabase } from '../lib/supabase';
 import appIcon from '../assets/appicon.png';
 
 // ── hCaptcha Config ───────────────────────────────────────────
@@ -56,16 +57,59 @@ export default function LoginPage() {
   // ── Listen for Google OAuth result events from Go backend ──
   useEffect(() => {
     const unlistenError = EventsOn('auth:google:error', (msg: string) => {
+      console.error("[LoginPage] ERROR EVENT DITERIMA DARI GO:", msg);
       setGoogleLoading(false);
       setError(`🔑 Login Google gagal: ${msg}`);
     });
-    // On success, AuthContext handles setSession → AuthGate auto-redirects
-    const unlistenSuccess = EventsOn('login-success', () => {
-      setGoogleLoading(false);
+
+    const unlistenSuccess = EventsOn('oauth-raw-url', async (rawUrl: string) => {
+      console.log("EVENT DITERIMA DARI GO:", rawUrl);
+      
+      try {
+        const urlObj = new URL(rawUrl);
+        const hashStr = urlObj.hash.slice(1);
+        const hashParams = new URLSearchParams(hashStr);
+        const queryParams = new URLSearchParams(urlObj.search);
+        
+        let sessionError = hashParams.get('error_description') || hashParams.get('error') ||
+                           queryParams.get('error_description') || queryParams.get('error');
+
+        if (sessionError) {
+          throw new Error(sessionError);
+        }
+
+        // Skenario A: Implicit Flow (Hash)
+        const accessToken = hashParams.get('access_token');
+        const refreshToken = hashParams.get('refresh_token');
+        if (accessToken) {
+          const { error } = await supabase.auth.setSession({ 
+            access_token: accessToken, 
+            refresh_token: refreshToken || '' 
+          });
+          if (error) throw error;
+          return;
+        }
+
+        // Skenario B: PKCE Flow (Query)
+        const code = queryParams.get('code');
+        if (code) {
+          const { error } = await supabase.auth.exchangeCodeForSession(code);
+          if (error) throw error;
+          return;
+        }
+
+        throw new Error("Token atau kode otorisasi tidak ditemukan di URL callback.");
+      } catch (err: any) {
+        console.error("Gagal memproses URL autentikasi:", err);
+        setError(`🔑 Gagal mengatur sesi login: ${err.message || String(err)}`);
+      } finally {
+        setGoogleLoading(false);
+      }
     });
+
     return () => {
       EventsOff('auth:google:error');
-      EventsOff('login-success');
+      EventsOff('oauth-raw-url');
       if (typeof unlistenError   === 'function') unlistenError();
       if (typeof unlistenSuccess === 'function') unlistenSuccess();
     };

@@ -4,6 +4,7 @@ import { Play, Flame, Globe2, Music, Coffee, ChevronRight, Sparkles } from 'luci
 import { main } from '../../wailsjs/go/models';
 import { GetPlaylist } from '../../wailsjs/go/main/App';
 import PlaylistDetail from './PlaylistDetail';
+import { useContextMenu } from '../contexts/ContextMenuContext';
 
 const CATEGORIES = [
   { id: 'global', name: 'Global Hits', subtitle: 'Top tracks worldwide', icon: <Globe2 className="w-6 h-6" />, gradient: 'from-blue-600 via-indigo-600 to-purple-700', accentColor: '#6366f1' },
@@ -225,8 +226,9 @@ function SongCard({ song, idx, large, accentColor, onPlay }: {
   idx: number; 
   large: boolean; 
   accentColor: string;
-  onPlay: () => void 
+  onPlay: () => void; 
 }) {
+  const { openContextMenu } = useContextMenu();
   const [dominantColor, setDominantColor] = useState(accentColor);
   const imgRef = useRef<HTMLImageElement>(null);
 
@@ -254,6 +256,17 @@ function SongCard({ song, idx, large, accentColor, onPlay }: {
       animate={{ opacity: 1, scale: 1 }}
       transition={{ delay: idx * 0.04, duration: 0.3 }}
       onClick={onPlay}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        openContextMenu(e.clientX, e.clientY, {
+          id: song.id,
+          title: song.title,
+          artist: song.artist,
+          album: song.album ?? '',
+          coverArt: song.coverArt ?? '',
+          previewUrl: (song as any).streamUrl ?? '',
+        });
+      }}
       className={`group cursor-pointer flex-shrink-0 flex flex-col relative ${large ? 'w-56' : 'w-44'}`}
     >
       {/* Card with gradient bg */}

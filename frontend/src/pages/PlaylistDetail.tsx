@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { Play, ArrowLeft, Clock, Music2 } from 'lucide-react';
 import { main } from '../../wailsjs/go/models';
+import { useContextMenu } from '../contexts/ContextMenuContext';
 
 interface PlaylistDetailProps {
   songs: main.Song[];
@@ -19,6 +20,7 @@ function formatDuration(ms: number): string {
 }
 
 export default function PlaylistDetail({ songs, playlistName, playlistColor, onPlaySong, onBack }: PlaylistDetailProps) {
+  const { openContextMenu } = useContextMenu();
   const totalDuration = songs.reduce((acc, s) => acc + (s.duration || 0), 0);
   const totalMinutes = Math.floor(totalDuration / 60000);
 
@@ -111,6 +113,17 @@ export default function PlaylistDetail({ songs, playlistName, playlistColor, onP
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: idx * 0.03, duration: 0.25 }}
               onClick={() => onPlaySong(song, songs, 'playlist')}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                openContextMenu(e.clientX, e.clientY, {
+                  id: song.id,
+                  title: song.title,
+                  artist: song.artist,
+                  album: song.album ?? '',
+                  coverArt: song.coverArt ?? '',
+                  previewUrl: (song as any).streamUrl ?? '',
+                });
+              }}
               className="group grid grid-cols-[40px_1fr_1fr_80px] gap-4 px-4 py-3 rounded-lg cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 transition-all duration-200 items-center"
             >
               {/* Track Number / Play icon */}

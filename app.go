@@ -1428,6 +1428,40 @@ func (a *App) GetStreamURLAsync(songID, artist, title, key1, key2 string) {
 }
 
 // ─────────────────────────────────────────────
+//  PRELOAD STREAM RESOLUTION
+// ─────────────────────────────────────────────
+
+// GetStreamURLForPreload resolves the YouTube audio URL for the NEXT song in background.
+// Unlike GetStreamURLAsync (which emits "stream:ready" and triggers active playback),
+// this function emits "stream:preloaded" so the React dual-audio engine can silently buffer
+// the result into the standby Audio() instance without starting playback.
+//
+// This is called automatically by useDualAudioEngine when the active song reaches 75% duration.
+func (a *App) GetStreamURLForPreload(songID, artist, title, key1, key2 string) {
+	go func() {
+		fmt.Printf("[Preload] Starting background resolution for songID=%s '%s - %s'\n", songID, artist, title)
+
+		streamURL, err := a.GetFullStreamURL(artist, title, key1, key2)
+		if err == nil && streamURL != "" {
+			fmt.Printf("[Preload] ✅ URL ready for songID=%s\n", songID)
+			runtime.EventsEmit(a.ctx, "stream:preloaded", map[string]interface{}{
+				"songId": songID,
+				"url":    streamURL,
+				"isHQ":   true,
+			})
+		} else {
+			// YouTube unavailable — React will fall back to iTunes preview URL
+			fmt.Printf("[Preload] ⚠️  YouTube failed for songID=%s: %v — signalling iTunes fallback\n", songID, err)
+			runtime.EventsEmit(a.ctx, "stream:preloaded", map[string]interface{}{
+				"songId": songID,
+				"url":    "",
+				"isHQ":   false,
+			})
+		}
+	}()
+}
+
+// ─────────────────────────────────────────────
 //  SMART SHUFFLE — ARTIST SANITIZATION + LAST.FM DISCOVERY
 // ─────────────────────────────────────────────
 

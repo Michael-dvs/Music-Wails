@@ -19,10 +19,10 @@ import PlaylistsPage from './pages/PlaylistsPage';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { ContextMenuProvider, useContextMenu } from './contexts/ContextMenuContext';
+import { useDualAudioEngine } from './hooks/useDualAudioEngine';
 
 import { main } from '../wailsjs/go/models';
-import { GetStreamURLAsync, GetLyrics, BuildSmartQueue, LogSongPlay } from '../wailsjs/go/main/App';
-import { EventsOn } from '../wailsjs/runtime/runtime';
+import { GetLyrics, BuildSmartQueue, LogSongPlay } from '../wailsjs/go/main/App';
 
 // ──────────────────────────────────────────
 //  Lyrics helpers (shared)
@@ -92,21 +92,34 @@ function MusicApp() {
   const [activeTab, setActiveTab] = useState('home');
   const [sidebarWidth, setSidebarWidth] = useState(240);
   const [isDragging, setIsDragging] = useState(false);
-  // Local favorite state — mirrors Supabase via optimistic update
-  const [currentSongFavorited, setCurrentSongFavorited] = useState(false);
 
   // Global artist page navigation — state lifted here for PlayerBar access
   const [artistView, setArtistView] = useState<{ id: number; name: string; genre?: string } | null>(null);
 
-  // Current playback
-  const [currentSong, setCurrentSong] = useState<AnyTrack | null>(initialPersistedState.currentSong || null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [progress, setProgress] = useState(0);
+  // ── Dual Audio Engine ──────────────────────────────────────────────────────
+  // handleSongEndedByEngine and handleCrossfadeSwap are defined after queue logic
+  // (forward-declared via ref so the hook can be initialized at this point)
+  const onSongEndedRef = useRef<(song: AnyTrack) => void>(() => {});
+  const onCrossfadeSwapRef = useRef<(song: AnyTrack) => void>(() => {});
+  const onPreloadStartRef = useRef<(song: AnyTrack) => void>(() => {});
+
+  const engine = useDualAudioEngine(
+    useCallback((song: AnyTrack) => onSongEndedRef.current(song), []),
+    useCallback((song: AnyTrack) => onCrossfadeSwapRef.current(song), []),
+    useCallback((song: AnyTrack) => onPreloadStartRef.current(song), []),
+  );
+
+  // Convenience aliases for readability
+  const currentSong = engine.currentSong;
+  const isPlaying = engine.isPlaying;
+  const progress = engine.progress;
+  const isHighQuality = engine.isHighQuality;
+  const streamLoading = engine.streamLoading;
+  const audioDuration = engine.duration;
+  const currentTimeSeconds = engine.currentTime;
+
   // bgColor is ONLY applied on the Lyrics page — rest of app stays flat black
   const [lyricsBgColor, setLyricsBgColor] = useState('rgb(12, 12, 12)');
-  const [isHighQuality, setIsHighQuality] = useState(false);
-  const [streamLoading, setStreamLoading] = useState(false);
-  const [audioDuration, setAudioDuration] = useState(0);
 
   // Queue
   const [queue, setQueue] = useState<AnyTrack[]>(initialPersistedState.queue || []);
@@ -124,6 +137,9 @@ function MusicApp() {
   // Stable ref so callbacks always see the latest queue
   const queueRef = useRef<AnyTrack[]>([]);
   useEffect(() => { queueRef.current = queue; }, [queue]);
+
+  // Sync volume change to the dual audio engine
+  useEffect(() => { engine.setVolume(volume); }, [volume, engine.setVolume]);
 
   // Persist state to localStorage
   useEffect(() => {
@@ -145,30 +161,28 @@ function MusicApp() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
   // Lyrics
-  const [currentTimeSeconds, setCurrentTimeSeconds] = useState(0);
   const [globalLyrics, setGlobalLyrics] = useState<LyricLine[]>([]);
   const [isLyricsLoading, setIsLyricsLoading] = useState(false);
   const [isLyricsRetrying, setIsLyricsRetrying] = useState(false); // exponential backoff active
   const [lrcDuration, setLrcDuration] = useState(0);
 
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [preloadedLyrics, setPreloadedLyrics] = useState<LyricLine[] | null>(null);
+  const [preloadedLrcDuration, setPreloadedLrcDuration] = useState(0);
 
-  // Sync volume with audio element
-  useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.volume = volume;
-    }
-  }, [volume]);
-  const rafRef = useRef<number | null>(null);
+  // currentSongRef — kept in sync for stable callbacks
   const currentSongRef = useRef<AnyTrack | null>(null);
+  useEffect(() => { currentSongRef.current = currentSong; }, [currentSong]);
+
   const isGeneratingRef = useRef(false);
   const queuePanelRef = useRef<HTMLDivElement | null>(null); // for click-outside detection
   // Stable ref so callbacks always read the LATEST profile (API keys) — fixes stale closure
   const profileRef = useRef(profile);
 
-  useEffect(() => { currentSongRef.current = currentSong; }, [currentSong]);
   useEffect(() => { isGeneratingRef.current = isGeneratingQueue; }, [isGeneratingQueue]);
   useEffect(() => { profileRef.current = profile; }, [profile]);
+
+  // Companion state for currentSongFavorited (kept in sync)
+  const [currentSongFavorited, setCurrentSongFavorited] = useState(false);
 
   // ── Dragging logic for Sidebar ──
   useEffect(() => {
@@ -219,6 +233,16 @@ function MusicApp() {
     }
   }, [currentSong?.id, checkFavorited]);
 
+  // Sync next-song reference to engine whenever queue or currentSong changes
+  // so the preload fires for the correct upcoming track
+  useEffect(() => {
+    const q = queueRef.current;
+    if (!currentSong || !q.length) { (engine as any)._setNextSong(null); return; }
+    const curIdx = q.findIndex(s => s.id === currentSong.id);
+    const next = curIdx !== -1 && curIdx + 1 < q.length ? q[curIdx + 1] : null;
+    (engine as any)._setNextSong(next);
+  }, [currentSong?.id, queue]);
+
   // ── Global context menu blocker (replaces with custom menu) ──
   // Allows right-click on input/textarea so users can paste text.
   useEffect(() => {
@@ -252,14 +276,13 @@ function MusicApp() {
           document.activeElement.blur();
         }
 
-        if (!audioRef.current || !currentSongRef.current || streamLoading) return;
+        if (!currentSongRef.current || streamLoading) return;
         
         if (isPlaying) {
-          audioRef.current.pause();
+          engine.pause();
         } else {
-          audioRef.current.play();
+          engine.play();
         }
-        setIsPlaying(!isPlaying);
       }
     };
     // Use capture phase to intercept the spacebar before it triggers button clicks
@@ -280,95 +303,14 @@ function MusicApp() {
     return () => document.removeEventListener('pointerdown', onPointerDown, true);
   }, [showQueue]);
 
-  // ── requestAnimationFrame timing (60 FPS) ──
-  useEffect(() => {
-    const tick = () => {
-      if (audioRef.current) {
-        const cur = audioRef.current.currentTime;
-        setCurrentTimeSeconds(cur);
-        const total =
-          audioRef.current.duration && isFinite(audioRef.current.duration) && audioRef.current.duration > 0
-            ? audioRef.current.duration
-            : 30;
-        setProgress((cur / total) * 100);
-      }
-      if (isPlaying) rafRef.current = requestAnimationFrame(tick);
-    };
-    if (isPlaying) rafRef.current = requestAnimationFrame(tick);
-    else if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
-  }, [isPlaying]);
-
-  const handleLoadedMetadata = useCallback(() => {
-    if (audioRef.current && isFinite(audioRef.current.duration)) {
-      setAudioDuration(audioRef.current.duration);
-    }
-  }, []);
+  // ── NOTE: RAF timing is now managed inside useDualAudioEngine ──
+  // engine.currentTime, engine.progress, and engine.duration are updated
+  // at 60fps by the hook's internal RAF loop. No RAF needed here.
 
   // ──────────────────────────────────────────
-  //  Wails Event: "stream:ready"
-  //  Go goroutine signals that YouTube URL is resolved (isHQ=true)
-  //  or that YouTube is unavailable (isHQ=false → use iTunes preview from song data).
-  //
-  //  Design guarantees:
-  //  • Audio plays ONCE per song — either YouTube or iTunes, never swapped mid-play.
-  //  • If song changed before event fires, the event is ignored (stale guard on songId).
-  //  • Lyrics logic is UNTOUCHED — fetchLyricsBackground + exponential backoff unchanged.
+  //  NOTE: stream:ready and stream:preloaded events are now handled
+  //  entirely inside useDualAudioEngine. This section intentionally left empty.
   // ──────────────────────────────────────────
-  useEffect(() => {
-    const off = EventsOn(
-      'stream:ready',
-      (data: { songId: string; url: string; isHQ: boolean }) => {
-        // ── Stale guard: ignore if the user has already moved to a different song ──
-        if (!audioRef.current || currentSongRef.current?.id !== data.songId) {
-          console.log(`[StreamAsync] Discarding stale event for songId=${data.songId}`);
-          return;
-        }
-
-        const song = currentSongRef.current;
-        const playURL = data.isHQ ? data.url : getPreviewURL(song);
-
-        if (!playURL) {
-          console.warn('[StreamAsync] No playable URL available for this song.');
-          setStreamLoading(false);
-          return;
-        }
-
-        console.log(`[StreamAsync] Playing ${data.isHQ ? 'YouTube HQ' : 'iTunes preview'} for songId=${data.songId}`);
-        setIsHighQuality(data.isHQ);
-        audioRef.current.src = playURL;
-        audioRef.current
-          .play()
-          .then(() => {
-            setIsPlaying(true);
-            setStreamLoading(false);
-          })
-          .catch((err) => {
-            console.error('[StreamAsync] Playback failed:', err);
-            // If YouTube URL failed to play (CDN rejection etc.), gracefully fall
-            // back to iTunes preview — but ONLY once (no further recursion).
-            if (data.isHQ) {
-              const fallback = getPreviewURL(currentSongRef.current!);
-              if (fallback && audioRef.current) {
-                console.warn('[StreamAsync] YouTube playback failed — using iTunes preview as last resort');
-                setIsHighQuality(false);
-                audioRef.current.src = fallback;
-                audioRef.current
-                  .play()
-                  .then(() => { setIsPlaying(true); setStreamLoading(false); })
-                  .catch(() => { setStreamLoading(false); });
-              } else {
-                setStreamLoading(false);
-              }
-            } else {
-              setStreamLoading(false);
-            }
-          });
-      },
-    );
-    // Cleanup: Wails EventsOn returns an unsubscribe function
-    return () => { off(); };
-  }, []); // mount-once — handler uses refs only, zero stale-closure risk
 
   // ──────────────────────────────────────────
   //  Smart Queue builder — with Fisher-Yates variety + deduplication filter
@@ -469,6 +411,28 @@ function MusicApp() {
     }
   }, []);
 
+  const fetchLyricsForPreload = useCallback(async (song: AnyTrack) => {
+    console.log(`[Lyrics] Preloading for: ${song.artist} - ${song.title}`);
+    setPreloadedLyrics(null);
+    setPreloadedLrcDuration(0);
+    try {
+      const durationSec = Math.floor((song.duration ?? 0) / 1000);
+      const result = await GetLyrics(song.artist, song.title, durationSec);
+      if (result?.lrcDuration > 0) setPreloadedLrcDuration(result.lrcDuration);
+      const raw = result?.syncedLyrics || result?.plainLyrics || '';
+      if (raw.trim()) {
+        setPreloadedLyrics(parseLyrics(raw));
+        console.log('[Lyrics] Preloaded lyrics stored in standby state.');
+      } else {
+        console.log('[Lyrics] Preload: No lyrics found.');
+        setPreloadedLyrics([]); // empty array signals that fetch completed but found nothing
+      }
+    } catch (e) {
+      console.error('[Lyrics] Preload Error:', e);
+      setPreloadedLyrics([]); // prevent infinite loading later
+    }
+  }, []);
+
   // ──────────────────────────────────────────
   //  Exponential Backoff Polling for Lyrics
   //  Only active when: lyrics page open + lyrics empty + same song
@@ -528,28 +492,24 @@ function MusicApp() {
   }, [showLyrics, currentSong?.id, globalLyrics.length, isLyricsLoading]);
 
   // ──────────────────────────────────────────
-  //  playSongCore — raw audio engine (no queue mutation)
+  //  playSongCore — delegates audio to useDualAudioEngine
   //  Called internally by navigation, queue panel clicks, handleSongEnd
   // ──────────────────────────────────────────
   const playSongCore = useCallback(async (song: AnyTrack, newQueue: AnyTrack[]) => {
-    if (audioRef.current) audioRef.current.pause();
-
-    setCurrentSong(song);
     setQueue(newQueue);
     queueRef.current = newQueue;
-    setIsPlaying(false);
-    setStreamLoading(true);
-    setIsHighQuality(false);
-    setProgress(0);
-    setCurrentTimeSeconds(0);
-    setAudioDuration(0);
+
+    // Determine next song for preload targeting
+    const curIdx = newQueue.findIndex(s => s.id === song.id);
+    const nextSong = curIdx !== -1 && curIdx + 1 < newQueue.length ? newQueue[curIdx + 1] : undefined;
+
+    const key1 = profileRef.current?.youtube_api_key_1 || '';
+    const key2 = profileRef.current?.youtube_api_key_2 || '';
 
     // Fetch lyrics concurrently in background — UNCHANGED.
-    // Exponential backoff polling is also preserved in its own useEffect below.
     fetchLyricsBackground(song);
 
-    // ── Fire-and-forget: log this play to local recently_played.json via Go ──
-    // Uses OS-level file I/O in Go — no Supabase dependency, no JWT needed.
+    // ── Fire-and-forget: log play to local recently_played.json via Go ──
     LogSongPlay(
       song.id,
       song.title,
@@ -558,17 +518,11 @@ function MusicApp() {
       song.coverArt ?? '',
     ).catch(err => console.warn('[LogSongPlay] non-fatal:', err));
 
-    // ── Kick off async YouTube stream resolution (non-blocking) ──
-    // GetStreamURLAsync returns immediately; result arrives via "stream:ready" Wails event.
-    // The event handler above (useEffect/EventsOn) decides what to play based on:
-    //   • isHQ=true  → play YouTube URL directly
-    //   • isHQ=false → play iTunes preview from song.streamUrl / song.previewUrl
-    // No audio URL is set here — the event handler owns the first and only play().
-    const key1 = profileRef.current?.youtube_api_key_1 || '';
-    const key2 = profileRef.current?.youtube_api_key_2 || '';
-    console.log(`[StreamAsync] Requesting stream for "${song.artist} - ${song.title}" (key1=${key1 ? '✓' : '✗'}, key2=${key2 ? '✓' : '✗'})`);
-    GetStreamURLAsync(song.id, song.artist, song.title, key1, key2);
-  }, [fetchLyricsBackground]);
+    // ── Delegate all audio management to the dual audio engine ──
+    // The engine calls GetStreamURLAsync internally and manages both Audio() instances.
+    console.log(`[playSongCore] "${song.artist} - ${song.title}" → dual audio engine (nextSong: ${nextSong?.title ?? 'none'})`);
+    (engine as any).playSong(song, volume, { key1, key2 }, nextSong);
+  }, [fetchLyricsBackground, engine, volume]);
 
 
   const toggleShuffle = useCallback((v?: boolean) => {
@@ -678,16 +632,20 @@ function MusicApp() {
   }, [playSongCore]);
 
   // ── Song end handler: advance queue + Smart Shuffle trigger ──
-  const handleSongEnd = useCallback(async () => {
+  // NOTE: This is called by the dual audio engine via onSongEndedRef.
+  // isRepeat causes the engine to seek to 0 and re-play (no new stream request).
+  const handleSongEnd = useCallback(async (finishedSong: AnyTrack) => {
     if (isRepeat) {
-      if (audioRef.current) {
-        audioRef.current.currentTime = 0;
-        audioRef.current.play().catch(err => console.error("Playback failed:", err));
+      // The engine's activeAudio still has the src loaded — just seek & replay
+      const activeAudio = engine.activeAudioRef.current;
+      if (activeAudio) {
+        activeAudio.currentTime = 0;
+        activeAudio.play().catch(err => console.error('Repeat playback failed:', err));
       }
       return;
     }
 
-    const song = currentSongRef.current;
+    const song = finishedSong ?? currentSongRef.current;
     const q = queueRef.current;
     if (!song) return;
 
@@ -748,7 +706,36 @@ function MusicApp() {
         setIsGeneratingQueue(false);
       }
     }
-  }, [playSongCore, BuildSmartQueue, isRepeat]);
+  }, [playSongCore, BuildSmartQueue, isRepeat, engine.activeAudioRef]);
+
+  // ── Wire callbacks into forward-refs so the hook can call them ──
+  // This must be done AFTER the callbacks are defined to avoid reference cycles.
+  useEffect(() => { onSongEndedRef.current = handleSongEnd; }, [handleSongEnd]);
+  
+  useEffect(() => {
+    onPreloadStartRef.current = (nextSong: AnyTrack) => {
+      fetchLyricsForPreload(nextSong);
+    };
+  }, [fetchLyricsForPreload]);
+
+  useEffect(() => {
+    onCrossfadeSwapRef.current = (nextSong: AnyTrack) => {
+      // When crossfade starts, queue has already been updated in the engine.
+      // We only need to advance the queue pointer here.
+      const q = queueRef.current;
+      const nextIdx = q.findIndex(s => s.id === nextSong.id);
+      if (nextIdx !== -1) {
+        console.log(`[Crossfade] Swapped to: "${nextSong.title}" at queue[${nextIdx}]`);
+      }
+
+      // Hard Swap Lyrics immediately
+      setGlobalLyrics(preloadedLyrics || []);
+      setLrcDuration(preloadedLrcDuration);
+      setPreloadedLyrics(null);
+      setPreloadedLrcDuration(0);
+    };
+  }, [preloadedLyrics, preloadedLrcDuration]);
+
 
   // ──────────────────────────────────────────
   //  playSong — USER-initiated play from Search/Home/Playlist
@@ -1019,10 +1006,10 @@ function MusicApp() {
       <PlayerBar
         currentSong={currentSong as main.Song}
         isPlaying={isPlaying}
-        setIsPlaying={setIsPlaying}
-        audioRef={audioRef}
+        setIsPlaying={(playing) => { playing ? engine.play() : engine.pause(); }}
+        audioRef={engine.activeAudioRef as React.RefObject<HTMLAudioElement>}
         progress={progress}
-        setProgress={setProgress}
+        setProgress={(p) => engine.seek(p)}
         isShuffle={isShuffle}
         setIsShuffle={toggleShuffle}
         onNext={playNext}
@@ -1044,31 +1031,9 @@ function MusicApp() {
         onToggleFavorite={(nowFavorited) => setCurrentSongFavorited(nowFavorited)}
       />
 
-      <audio
-        ref={audioRef}
-        onEnded={handleSongEnd}
-        onLoadedMetadata={handleLoadedMetadata}
-        onError={(e) => {
-          const audio = e.currentTarget;
-          const err = audio.error;
-          const codes: Record<number, string> = {
-            1: 'MEDIA_ERR_ABORTED',
-            2: 'MEDIA_ERR_NETWORK',
-            3: 'MEDIA_ERR_DECODE',
-            4: 'MEDIA_ERR_SRC_NOT_SUPPORTED',
-          };
-          const code = err?.code ?? 0;
-          console.error(
-            `[Audio] ❌ Playback error — code=${code} (${codes[code] ?? 'UNKNOWN'})`,
-            `src=${audio.src?.substring(0, 80)}...`,
-            err?.message
-          );
-        }}
-        onStalled={() => console.warn('[Audio] ⚠️ Stalled — browser stopped receiving data (possible CORS/CSP block)')}
-        onWaiting={() => console.log('[Audio] ⏳ Waiting — buffering...')}
-        onCanPlay={() => console.log('[Audio] ✅ canplay — stream ready to play')}
-        preload="auto"
-      />
+      {/* NOTE: <audio> tag removed — playback is managed by useDualAudioEngine
+          using two HTMLAudioElement instances created via new Audio().
+          This eliminates the need for a DOM-attached audio element. */}
 
       {/* ── Add Playlist Modal ─────────────────────────────────── */}
       <AddPlaylistModal

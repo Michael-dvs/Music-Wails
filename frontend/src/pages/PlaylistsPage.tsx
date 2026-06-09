@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Play, Loader2, Clock, Music2, Disc3, Pencil, Plus, Sparkles, Trash2, AlertTriangle, X, GripVertical, RefreshCw, MoreHorizontal } from 'lucide-react';
-import { getPlaylist, getPlaylistTracks, addTrackToPlaylist, updatePlaylistCover, deletePlaylist, removeTrackFromPlaylist, updatePlaylistTrackOrder } from '../lib/supabaseOps';
+import { getPlaylist, getPlaylistTracks, addTrackToPlaylist, updatePlaylistCover, deletePlaylist, removeTrackFromPlaylist, updatePlaylistTrackOrder, updatePlaylistName } from '../lib/supabaseOps';
 import type { Playlist, PlaylistTrack } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useContextMenu } from '../contexts/ContextMenuContext';
@@ -69,6 +69,10 @@ export default function PlaylistsPage({ initialPlaylistId, onPlaySong, onBack }:
   const [tracks, setTracks] = useState<PlaylistTrack[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Inline editing name
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editedName, setEditedName] = useState("");
 
   // Recommendations
   const [recommendations, setRecommendations] = useState<RecommendedTrack[]>([]);
@@ -166,18 +170,19 @@ export default function PlaylistsPage({ initialPlaylistId, onPlaySong, onBack }:
 
     let cancelled = false;
 
-    const loadData = async () => {
+    const loadPlaylist = async () => {
       setLoading(true);
       setError(null);
       try {
-        const fetchedPlaylist = await getPlaylist(initialPlaylistId);
-        if (!fetchedPlaylist) throw new Error("Playlist not found");
-        
-        const fetchedTracks = await getPlaylistTracks(initialPlaylistId);
+        const data = await getPlaylist(initialPlaylistId);
+        setPlaylist(data);
+        setEditedName(data?.name || "");
+
+        const trackData = await getPlaylistTracks(initialPlaylistId);
 
         if (!cancelled) {
-          setPlaylist(fetchedPlaylist);
-          setTracks(fetchedTracks);
+          setPlaylist(data);
+          setTracks(trackData);
         }
       } catch (err: any) {
         if (!cancelled) {
@@ -188,7 +193,7 @@ export default function PlaylistsPage({ initialPlaylistId, onPlaySong, onBack }:
       }
     };
 
-    loadData();
+    loadPlaylist();
 
     return () => { cancelled = true; };
   }, [initialPlaylistId]);
@@ -213,6 +218,26 @@ export default function PlaylistsPage({ initialPlaylistId, onPlaySong, onBack }:
     const queue = tracks.map(toSong);
     onPlaySong(song, queue, 'playlist');
   }, [tracks, onPlaySong]);
+
+  const handleNameSave = async () => {
+    if (!playlist) return;
+    const trimmedName = editedName.trim();
+    if (!trimmedName || trimmedName === playlist.name) {
+      setIsEditingName(false);
+      setEditedName(playlist.name);
+      return;
+    }
+    
+    try {
+      await updatePlaylistName(playlist.id, trimmedName);
+      setPlaylist({ ...playlist, name: trimmedName });
+      setIsEditingName(false);
+      window.dispatchEvent(new Event('playlistUpdated'));
+    } catch (err) {
+      console.error('[PlaylistsPage] Failed to update playlist name:', err);
+      setEditedName(playlist.name); // revert on error
+    }
+  };
 
   const handlePlayAll = useCallback(() => {
     if (tracks.length > 0) handlePlayTrack(tracks[0]);
@@ -488,8 +513,22 @@ export default function PlaylistsPage({ initialPlaylistId, onPlaySong, onBack }:
           </span>
           {loading ? (
             <div className="h-12 w-64 rounded-lg bg-black/10 dark:bg-white/10 animate-pulse" />
+          ) : isEditingName ? (
+            <input
+              type="text"
+              value={editedName}
+              onChange={(e) => setEditedName(e.target.value)}
+              onBlur={handleNameSave}
+              onKeyDown={(e) => e.key === 'Enter' && handleNameSave()}
+              autoFocus
+              className="text-4xl md:text-5xl font-black text-gray-900 dark:text-white tracking-tight leading-tight bg-transparent border-none outline-none ring-0 w-full p-0 m-0"
+            />
           ) : (
-            <h1 className="text-4xl md:text-5xl font-black text-gray-900 dark:text-white tracking-tight leading-tight">
+            <h1 
+              className="text-4xl md:text-5xl font-black text-gray-900 dark:text-white tracking-tight leading-tight cursor-pointer hover:underline"
+              onClick={() => setIsEditingName(true)}
+              title="Click to edit name"
+            >
               {playlist?.name || 'Unknown Playlist'}
             </h1>
           )}

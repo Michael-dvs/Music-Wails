@@ -409,6 +409,24 @@ export async function updatePlaylistCover(
   console.log('[supabaseOps] updatePlaylistCover ✅ updated');
 }
 
+/**
+ * Updates the name of a specific playlist.
+ */
+export async function updatePlaylistName(playlistId: string, newName: string): Promise<void> {
+  console.log('[supabaseOps] updatePlaylistName →', playlistId, newName);
+
+  const { error } = await supabase
+    .from('playlists')
+    .update({ name: newName })
+    .eq('id', playlistId);
+
+  if (error) {
+    console.error('[supabaseOps] updatePlaylistName failed:', error.message);
+    throw new Error(error.message);
+  }
+  console.log('[supabaseOps] updatePlaylistName ✅ updated');
+}
+
 // ─────────────────────────────────────────────
 //  IMPORT FROM LINK (basic metadata extraction)
 

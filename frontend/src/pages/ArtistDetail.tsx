@@ -3,7 +3,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Play, Music2, Disc3, User, Loader2 } from 'lucide-react';
 import { main } from '../../wailsjs/go/models';
 import { fetchAPI } from '../lib/fetchAPI';
+import { useContextMenu } from '../contexts/ContextMenuContext';
 import AlbumDetail from './AlbumDetail';
+import ArtistAvatar from '../components/ArtistAvatar';
 import {
   getHighResArtwork,
   getReleaseYear,
@@ -72,6 +74,8 @@ export default function ArtistDetail({
   onPlaySong,
   onNavigateToArtist,
 }: ArtistDetailProps) {
+  const { openContextMenu } = useContextMenu();
+
   // ── Core data states ──
   const [resolvedArtistId, setResolvedArtistId] = useState<number>(artistIdProp ?? 0);
   const [resolving, setResolving] = useState<boolean>(!artistIdProp || artistIdProp === 0);
@@ -209,7 +213,6 @@ export default function ArtistDetail({
     if (topTracks.length > 0) handlePlayItunesTrack(topTracks[0], topTracks);
   }, [topTracks, handlePlayItunesTrack]);
 
-  const avatarGradient = getAvatarColor(artistName);
   const initials = getInitials(artistName);
 
   // ── Guard: show skeleton while resolving artistId ──
@@ -268,11 +271,15 @@ export default function ArtistDetail({
             initial={{ opacity: 0, scale: 0.85 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.08 }}
-            className={`w-44 h-44 rounded-full bg-gradient-to-br ${avatarGradient} flex items-center justify-center shadow-2xl shadow-black/40 flex-shrink-0 select-none`}
+            className="flex-shrink-0"
           >
-            <span className="text-5xl font-black text-white/90 leading-none tracking-tighter">
-              {initials}
-            </span>
+            <ArtistAvatar
+              name={artistName}
+              itunesId={resolvedArtistId}
+              defaultLetter={initials}
+              className="w-44 h-44 shadow-2xl shadow-black/40"
+              textClassName="text-5xl tracking-tighter"
+            />
           </motion.div>
 
           {/* Text info */}
@@ -331,6 +338,17 @@ export default function ArtistDetail({
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: idx * 0.04 }}
                   onClick={() => handlePlayItunesTrack(track, topTracks)}
+                  onContextMenu={(e) => {
+                    const song = itunesTrackToSong(track);
+                    openContextMenu(e.clientX, e.clientY, {
+                      id: song.id,
+                      title: song.title,
+                      artist: song.artist,
+                      album: song.album || '',
+                      coverArt: song.coverArt || '',
+                      previewUrl: song.streamUrl || '',
+                    });
+                  }}
                   className="group flex items-center space-x-4 px-3 py-2.5 rounded-xl cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 transition-all"
                 >
                   <span className="text-sm text-gray-400 w-6 text-center font-medium group-hover:hidden tabular-nums">

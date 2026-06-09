@@ -1,3 +1,4 @@
+import React, { forwardRef } from 'react';
 import { motion } from 'framer-motion';
 import { Play, ArrowLeft, Clock, Music2 } from 'lucide-react';
 import { main } from '../../wailsjs/go/models';
@@ -19,13 +20,15 @@ function formatDuration(ms: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-export default function PlaylistDetail({ songs, playlistName, playlistColor, onPlaySong, onBack }: PlaylistDetailProps) {
+const PlaylistDetail = forwardRef<HTMLDivElement, PlaylistDetailProps>(
+  ({ songs, playlistName, playlistColor, onPlaySong, onBack }, ref) => {
   const { openContextMenu } = useContextMenu();
   const totalDuration = songs.reduce((acc, s) => acc + (s.duration || 0), 0);
   const totalMinutes = Math.floor(totalDuration / 60000);
 
   return (
     <motion.div 
+      ref={ref}
       initial={{ opacity: 0, x: 30 }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -30 }}
@@ -162,4 +165,8 @@ export default function PlaylistDetail({ songs, playlistName, playlistColor, onP
       </div>
     </motion.div>
   );
-}
+});
+
+PlaylistDetail.displayName = 'PlaylistDetail';
+
+export default PlaylistDetail;

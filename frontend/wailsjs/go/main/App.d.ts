@@ -16,6 +16,10 @@ export function DeletePlaylist(arg1:string):Promise<void>;
 
 export function FetchExternalAPI(arg1:string):Promise<string>;
 
+export function GetArtistImageFromDeezer(arg1:string):Promise<string>;
+
+export function GetArtistImageSmart(arg1:string,arg2:number):Promise<string>;
+
 export function GetFavorites(arg1:string):Promise<Array<main.FavoriteTrack>>;
 
 export function GetFullStreamURL(arg1:string,arg2:string,arg3:string,arg4:string):Promise<string>;

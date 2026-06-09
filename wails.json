@@ -7,7 +7,14 @@
   "frontend:dev:watcher": "npm run dev",
   "frontend:dev:serverUrl": "auto",
   "author": {
-    "name": "Michael",
-    "email": "maikerurahadian@gmail.com"
+    "name": "Michael Aristyo Rahadiyan",
+    "email": "23.michaelaristio@gmail.com"
+  },
+  "info": {
+    "companyName": "michael-dvs",
+    "productName": "Music-Wails",
+    "productVersion": "1.0.0",
+    "copyright": "Copyright © 2026 michael-dvs",
+    "comments": "A Seamless Desktop Music Player powered by Supabase & Go"
   }
 }

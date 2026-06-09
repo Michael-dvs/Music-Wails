@@ -107,6 +107,7 @@ function MusicApp() {
     useCallback((song: AnyTrack) => onSongEndedRef.current(song), []),
     useCallback((song: AnyTrack) => onCrossfadeSwapRef.current(song), []),
     useCallback((song: AnyTrack) => onPreloadStartRef.current(song), []),
+    initialPersistedState.currentSong
   );
 
   // Convenience aliases for readability
@@ -909,53 +910,57 @@ function MusicApp() {
         <div className="flex-1 relative h-full overflow-hidden">
           <main className="w-full h-full relative z-10">
             {/* Main Content Tabs - Kept mounted underneath Lyrics to preserve state (e.g. Search results) */}
-            <div className="w-full h-full" style={{ display: showLyrics ? 'none' : 'block' }}>
-              <AnimatePresence mode="wait">
-                {/* Global Artist Detail overlay — appears on top of any tab */}
-                {artistView ? (
-                  <ArtistDetail
-                    key={`artist-${artistView.id}`}
-                    artistId={artistView.id}
-                    artistName={artistView.name}
-                    primaryGenre={artistView.genre}
-                    onBack={() => setArtistView(null)}
-                    onPlaySong={handlePlaySong}
-                    onNavigateToArtist={navigateToArtist}
-                  />
-                ) : (
-                  <>
-                    {activeTab === 'home' && <Home key="home" onPlaySong={handlePlaySong} />}
-                    {activeTab === 'search' && <Search key="search" onPlaySong={handlePlaySong} onNavigateToArtist={navigateToArtist} />}
-                    {activeTab === 'profile' && <Profile key="profile" />}
-                    {activeTab === 'settings' && <Settings key="settings" />}
-                    {activeTab === 'liked' && (
-                      <LikedSongsPage key="liked" onPlaySong={handlePlaySong} />
-                    )}
-                    {activeTab === 'recently-played' && (
-                      <RecentlyPlayedPage key="recently-played" onPlaySong={handlePlaySong} />
-                    )}
-                    {/* Playlists — fully functional */}
-                    {activeTab.startsWith('playlist:') && (
-                      <PlaylistsPage 
-                        key={activeTab} 
-                        onPlaySong={handlePlaySong} 
-                        initialPlaylistId={activeTab.split(':')[1]} 
-                        onBack={() => setActiveTab('home')}
-                      />
-                    )}
-                    {/* Top Tracks — Coming Soon */}
-                    {activeTab === 'top-tracks' && (
-                      <div key="top-tracks" className="w-full h-full flex flex-col items-center justify-center text-gray-500 dark:text-gray-400 gap-3">
-                        <div className="w-16 h-16 rounded-2xl bg-brand-500/10 flex items-center justify-center">
-                          <svg className="w-8 h-8 text-brand-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
-                          </svg>
-                        </div>
-                        <h2 className="text-xl font-semibold text-gray-700 dark:text-gray-300">Top Tracks</h2>
-                        <p className="text-sm text-gray-400 dark:text-gray-600">Coming Soon</p>
+            <div className="w-full h-full relative" style={{ display: showLyrics ? 'none' : 'block' }}>
+              <div className="w-full h-full" style={{ display: artistView ? 'none' : 'block' }}>
+                <AnimatePresence mode="wait">
+                  {activeTab === 'home' && <Home key="home" onPlaySong={handlePlaySong} />}
+                  {activeTab === 'search' && <Search key="search" onPlaySong={handlePlaySong} onNavigateToArtist={navigateToArtist} />}
+                  {activeTab === 'profile' && <Profile key="profile" />}
+                  {activeTab === 'settings' && <Settings key="settings" />}
+                  {activeTab === 'liked' && (
+                    <LikedSongsPage key="liked" onPlaySong={handlePlaySong} />
+                  )}
+                  {activeTab === 'recently-played' && (
+                    <RecentlyPlayedPage key="recently-played" onPlaySong={handlePlaySong} />
+                  )}
+                  {/* Playlists — fully functional */}
+                  {activeTab.startsWith('playlist:') && (
+                    <PlaylistsPage 
+                      key={activeTab} 
+                      onPlaySong={handlePlaySong} 
+                      initialPlaylistId={activeTab.split(':')[1]} 
+                      onBack={() => setActiveTab('home')}
+                    />
+                  )}
+                  {/* Top Tracks — Coming Soon */}
+                  {activeTab === 'top-tracks' && (
+                    <div key="top-tracks" className="w-full h-full flex flex-col items-center justify-center text-gray-500 dark:text-gray-400 gap-3">
+                      <div className="w-16 h-16 rounded-2xl bg-brand-500/10 flex items-center justify-center">
+                        <svg className="w-8 h-8 text-brand-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                        </svg>
                       </div>
-                    )}
-                  </>
+                      <h2 className="text-xl font-semibold text-gray-700 dark:text-gray-300">Top Tracks</h2>
+                      <p className="text-sm text-gray-400 dark:text-gray-600">Coming Soon</p>
+                    </div>
+                  )}
+                </AnimatePresence>
+              </div>
+
+              {/* Global Artist Detail overlay — appears on top of any tab */}
+              <AnimatePresence>
+                {artistView && (
+                  <div key={`artist-wrapper-${artistView.id}`} className="absolute inset-0 z-20 bg-[var(--app-bg)]">
+                    <ArtistDetail
+                      key={`artist-${artistView.id}`}
+                      artistId={artistView.id}
+                      artistName={artistView.name}
+                      primaryGenre={artistView.genre}
+                      onBack={() => setArtistView(null)}
+                      onPlaySong={handlePlaySong}
+                      onNavigateToArtist={navigateToArtist}
+                    />
+                  </div>
                 )}
               </AnimatePresence>
             </div>

@@ -8,7 +8,7 @@
  * - Closes on click-outside, scroll, or Escape key
  */
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Play, Heart, ListPlus, ListEnd, ChevronRight, Loader2, Check } from 'lucide-react';
@@ -95,9 +95,11 @@ function PlaylistSubMenu({
 }
 
 // ── Main Context Menu Component ──────────────────────────────────
-export default function ContextMenu({ state, onClose, onPlayNext, onAddQueue }: ContextMenuProps) {
+const ContextMenu = forwardRef<HTMLDivElement, ContextMenuProps>(({ state, onClose, onPlayNext, onAddQueue }, ref) => {
   const { user, isFavorited, refreshFavorites } = useAuth();
   const menuRef = useRef<HTMLDivElement>(null);
+
+  useImperativeHandle(ref, () => menuRef.current!);
 
   const [showPlaylistMenu, setShowPlaylistMenu] = useState(false);
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
@@ -354,7 +356,11 @@ export default function ContextMenu({ state, onClose, onPlayNext, onAddQueue }: 
     </AnimatePresence>,
     document.body
   );
-}
+});
+
+ContextMenu.displayName = 'ContextMenu';
+
+export default ContextMenu;
 
 // ── Reusable menu button ─────────────────────────────────────────
 function MenuButton({

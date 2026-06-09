@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { fetchAPI } from '../lib/fetchAPI';
 import AlbumDetail, { getAvatarColor, getInitials, getHighResArtwork } from './AlbumDetail';
 import { useContextMenu } from '../contexts/ContextMenuContext';
+import ArtistAvatar from '../components/ArtistAvatar';
 
 const ANIMATED_PLACEHOLDERS = [
   'Cari lagu Tulus...',
@@ -270,7 +271,6 @@ export default function Search({
               </h2>
               <div className="flex space-x-6 overflow-x-auto pb-3 no-scrollbar">
                 {artists.map((artist, idx) => {
-                  const gradient = getAvatarColor(artist.artistName);
                   const initials = getInitials(artist.artistName);
                   return (
                     <motion.button
@@ -282,18 +282,13 @@ export default function Search({
                       // Wrapper is plain flex-col — NO rounded-full here (that caused the square-ring bug)
                       className="flex flex-col items-center space-y-2.5 flex-shrink-0 group cursor-pointer focus:outline-none"
                     >
-                      {/* Ring lives on the w-20 circle itself, not the button wrapper */}
-                      <div
-                        className={`w-20 h-20 rounded-full bg-gradient-to-br ${gradient}
-                          flex items-center justify-center shadow-md select-none
-                          group-hover:scale-110 group-hover:shadow-xl transition-all duration-300
-                          group-focus-visible:ring-2 group-focus-visible:ring-brand-500
-                          group-focus-visible:ring-offset-2 group-focus-visible:ring-offset-[var(--app-bg)]`}
-                      >
-                        <span className="text-xl font-black text-white/90 leading-none tracking-tight">
-                          {initials}
-                        </span>
-                      </div>
+                      <ArtistAvatar
+                        name={artist.artistName}
+                        itunesId={artist.artistId}
+                        defaultLetter={initials}
+                        className="w-20 h-20 shadow-md group-hover:scale-110 group-hover:shadow-xl transition-all duration-300 group-focus-visible:ring-2 group-focus-visible:ring-brand-500 group-focus-visible:ring-offset-2 group-focus-visible:ring-offset-[var(--app-bg)]"
+                        textClassName="text-xl"
+                      />
                       <div className="text-center">
                         <p className="text-sm font-semibold text-gray-900 dark:text-white group-hover:text-brand-500 dark:group-hover:text-brand-400 transition-colors max-w-[84px] truncate">
                           {artist.artistName}

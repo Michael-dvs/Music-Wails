@@ -133,6 +133,7 @@ export function useDualAudioEngine(
   onSongEnded: (finishedSong: AnyTrack) => void,
   onCrossfadeSwap: (nextSong: AnyTrack) => void,
   onPreloadStart: (nextSong: AnyTrack) => void,
+  initialSong?: AnyTrack | null
 ): UseDualAudioEngineReturn {
   const { settings } = usePlayerSettings();
   const settingsRef = useRef(settings);
@@ -149,11 +150,27 @@ export function useDualAudioEngine(
   const activeAudioRef = useRef<HTMLAudioElement | null>(audioA.current);
 
   // ── State ──────────────────────────────────────────────────────────────────
-  const [state, dispatch] = useReducer(engineReducer, INIT_STATE);
-  const [currentSong, setCurrentSong] = useState<AnyTrack | null>(null);
+  const [state, dispatch] = useReducer(engineReducer, {
+    ...INIT_STATE,
+    duration: initialSong?.duration ? initialSong.duration / 1000 : 0
+  });
+  const [currentSong, setCurrentSong] = useState<AnyTrack | null>(initialSong || null);
   const [volume, setVolumeState] = useState(1.0);
 
-  const currentSongRef = useRef<AnyTrack | null>(null);
+  const currentSongRef = useRef<AnyTrack | null>(initialSong || null);
+
+  // ── Hydration ─────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (initialSong) {
+      const url = getPreviewURL(initialSong);
+      if (url) {
+        audioA.current.src = url;
+        audioA.current.load();
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const nextSongRef = useRef<AnyTrack | null>(null);      // song buffered in standby
   const profileKeysRef = useRef({ key1: '', key2: '' });
   const volumeRef = useRef(1.0);
@@ -215,6 +232,7 @@ export function useDualAudioEngine(
           !preloadTriggeredRef.current &&
           !isNextPreloadedRef.current &&
           !isCrossfadingRef.current &&
+          nextSongRef.current != null &&
           dur > 0 &&
           (cur / dur) >= 0.75
         ) {
@@ -230,6 +248,7 @@ export function useDualAudioEngine(
           crossfade &&
           isNextPreloadedRef.current &&
           !isCrossfadingRef.current &&
+          nextSongRef.current != null &&
           dur > 0 &&
           (dur - cur) <= crossfadeDuration &&
           (dur - cur) > 0
@@ -301,6 +320,15 @@ export function useDualAudioEngine(
       // This ensures the UI (Title, Artist, Lyrics, Duration slider) swaps instantly.
       currentSongRef.current = nextSong;
       setCurrentSong(nextSong);
+      
+      // ── Wajib: Reset state preload SECARA TUNTAS ──────────
+      // Lakukan SEGERA setelah referensi lagu berpindah, agar saat lagu ini
+      // mencapai 75%, siklus preload dapat kembali tertrigger untuk lagu ke-3.
+      isNextPreloadedRef.current = false;
+      preloadTriggeredRef.current = false;
+      nextSongRef.current = null;
+
+      // Beritahu App.tsx untuk update queue (nantinya akan mensuplai ulang nextSongRef)
       onCrossfadeSwap(nextSong);
 
       let step = 0;
@@ -318,11 +346,7 @@ export function useDualAudioEngine(
           fadeOutAudio.pause();
           fadeOutAudio.src = '';
 
-          // Reset flags
-          isNextPreloadedRef.current = false;
           isCrossfadingRef.current = false;
-          preloadTriggeredRef.current = false;
-          nextSongRef.current = null;
 
           dispatch({ type: 'CROSSFADE_COMPLETE' });
           console.log('[DualAudio] Crossfade complete — old audio detached');

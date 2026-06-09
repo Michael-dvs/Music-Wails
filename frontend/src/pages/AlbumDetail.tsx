@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, forwardRef } from 'react';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Play, Loader2, Clock, Music2 } from 'lucide-react';
 import { main } from '../../wailsjs/go/models';
@@ -119,7 +119,8 @@ interface AlbumDetailProps {
 }
 
 // ── Component ─────────────────────────────────────────────────────
-export default function AlbumDetail({ album, onBack, onPlaySong, onNavigateToArtist }: AlbumDetailProps) {
+const AlbumDetail = forwardRef<HTMLDivElement, AlbumDetailProps>(
+  ({ album, onBack, onPlaySong, onNavigateToArtist }, ref) => {
   const { openContextMenu } = useContextMenu();
   const [tracks, setTracks] = useState<ItunesTrack[]>([]);
   const [loading, setLoading] = useState(true);
@@ -220,6 +221,7 @@ export default function AlbumDetail({ album, onBack, onPlaySong, onNavigateToArt
 
   return (
     <motion.div
+      ref={ref}
       initial={{ opacity: 0, x: 40 }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -40 }}
@@ -383,4 +385,8 @@ export default function AlbumDetail({ album, onBack, onPlaySong, onNavigateToArt
       </div>
     </motion.div>
   );
-}
+});
+
+AlbumDetail.displayName = 'AlbumDetail';
+
+export default AlbumDetail;

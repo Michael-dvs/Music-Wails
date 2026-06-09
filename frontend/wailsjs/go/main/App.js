@@ -30,6 +30,14 @@ export function FetchExternalAPI(arg1) {
   return window['go']['main']['App']['FetchExternalAPI'](arg1);
 }
 
+export function GetArtistImageFromDeezer(arg1) {
+  return window['go']['main']['App']['GetArtistImageFromDeezer'](arg1);
+}
+
+export function GetArtistImageSmart(arg1, arg2) {
+  return window['go']['main']['App']['GetArtistImageSmart'](arg1, arg2);
+}
+
 export function GetFavorites(arg1) {
   return window['go']['main']['App']['GetFavorites'](arg1);
 }

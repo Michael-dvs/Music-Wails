@@ -747,105 +747,103 @@ export default function PlaylistsPage({ initialPlaylistId, onPlaySong, onBack }:
     {/* ── Delete Playlist Confirmation Modal ─────────────────────────── */}
     <AnimatePresence>
       {showDeleteModal && playlist && (
-        <>
-          {/* Backdrop */}
-          <motion.div
-            key="delete-backdrop"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-[200] bg-black/70 backdrop-blur-sm"
-            onClick={() => !isDeleting && setShowDeleteModal(false)}
-          />
+        <motion.div
+          key="delete-backdrop"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
+          className="fixed inset-0 z-[200] bg-black/70 backdrop-blur-sm"
+          onClick={() => !isDeleting && setShowDeleteModal(false)}
+        />
+      )}
 
-          {/* Modal Panel */}
-          <motion.div
-            key="delete-modal"
-            initial={{ opacity: 0, scale: 0.9, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.9, y: 20 }}
-            transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-            className="fixed inset-0 z-[201] flex items-center justify-center pointer-events-none"
-          >
-            <div className="pointer-events-auto w-full max-w-[400px] mx-4 rounded-2xl overflow-hidden bg-zinc-900 border border-zinc-800 shadow-2xl shadow-black/70">
-              {/* Header */}
-              <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-zinc-800">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-full bg-red-500/15 flex items-center justify-center flex-shrink-0">
-                    <AlertTriangle className="w-4 h-4 text-red-500" />
-                  </div>
-                  <h2 className="text-[15px] font-bold text-zinc-100">Hapus Playlist</h2>
+      {showDeleteModal && playlist && (
+        <motion.div
+          key="delete-modal"
+          initial={{ opacity: 0, scale: 0.9, y: 20 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.9, y: 20 }}
+          transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+          className="fixed inset-0 z-[201] flex items-center justify-center pointer-events-none"
+        >
+          <div className="pointer-events-auto w-full max-w-[400px] mx-4 rounded-2xl overflow-hidden bg-zinc-900 border border-zinc-800 shadow-2xl shadow-black/70">
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-zinc-800">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-full bg-red-500/15 flex items-center justify-center flex-shrink-0">
+                  <AlertTriangle className="w-4 h-4 text-red-500" />
                 </div>
-                <button
-                  onClick={() => setShowDeleteModal(false)}
+                <h2 className="text-[15px] font-bold text-zinc-100">Hapus Playlist</h2>
+              </div>
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                disabled={isDeleting}
+                className="w-7 h-7 flex items-center justify-center rounded-full text-zinc-500 hover:text-zinc-100 hover:bg-zinc-800 disabled:opacity-40 transition-all"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="px-5 py-5 space-y-4">
+              {/* Warning banner */}
+              <div className="flex items-start gap-3 px-4 py-3.5 rounded-xl bg-red-500/10 border border-red-500/20">
+                <AlertTriangle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
+                <p className="text-[13px] text-red-300 leading-relaxed">
+                  <strong className="text-red-400">Tindakan ini tidak dapat dibatalkan.</strong>{' '}
+                  Playlist beserta semua lagunya akan dihapus secara permanen.
+                </p>
+              </div>
+
+              {/* Confirm by typing name */}
+              <div>
+                <label className="text-[11px] font-semibold text-zinc-400 uppercase tracking-widest mb-1.5 block">
+                  Ketik{' '}
+                  <span className="text-zinc-200 font-bold normal-case tracking-normal">
+                    {playlist.name}
+                  </span>{' '}
+                  untuk mengkonfirmasi
+                </label>
+                <input
+                  autoFocus
+                  type="text"
+                  value={deleteConfirmText}
+                  onChange={(e) => setDeleteConfirmText(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && deleteMatch && handleDeletePlaylist()}
+                  placeholder={playlist.name}
+                  className="w-full px-3.5 py-2.5 rounded-xl text-[13px]
+                    bg-zinc-800/50 border border-zinc-700 text-zinc-100
+                    placeholder:text-zinc-600
+                    focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500/40
+                    transition-all duration-150"
                   disabled={isDeleting}
-                  className="w-7 h-7 flex items-center justify-center rounded-full text-zinc-500 hover:text-zinc-100 hover:bg-zinc-800 disabled:opacity-40 transition-all"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              {/* Body */}
-              <div className="px-5 py-5 space-y-4">
-                {/* Warning banner */}
-                <div className="flex items-start gap-3 px-4 py-3.5 rounded-xl bg-red-500/10 border border-red-500/20">
-                  <AlertTriangle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
-                  <p className="text-[13px] text-red-300 leading-relaxed">
-                    <strong className="text-red-400">Tindakan ini tidak dapat dibatalkan.</strong>{' '}
-                    Playlist beserta semua lagunya akan dihapus secara permanen.
-                  </p>
-                </div>
-
-                {/* Confirm by typing name */}
-                <div>
-                  <label className="text-[11px] font-semibold text-zinc-400 uppercase tracking-widest mb-1.5 block">
-                    Ketik{' '}
-                    <span className="text-zinc-200 font-bold normal-case tracking-normal">
-                      {playlist.name}
-                    </span>{' '}
-                    untuk mengkonfirmasi
-                  </label>
-                  <input
-                    autoFocus
-                    type="text"
-                    value={deleteConfirmText}
-                    onChange={(e) => setDeleteConfirmText(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && deleteMatch && handleDeletePlaylist()}
-                    placeholder={playlist.name}
-                    className="w-full px-3.5 py-2.5 rounded-xl text-[13px]
-                      bg-zinc-800/50 border border-zinc-700 text-zinc-100
-                      placeholder:text-zinc-600
-                      focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500/40
-                      transition-all duration-150"
-                    disabled={isDeleting}
-                  />
-                </div>
-              </div>
-
-              {/* Footer */}
-              <div className="px-5 pb-5">
-                <motion.button
-                  onClick={handleDeletePlaylist}
-                  disabled={!deleteMatch || isDeleting}
-                  whileTap={deleteMatch && !isDeleting ? { scale: 0.97 } : {}}
-                  className={`w-full flex items-center justify-center gap-2.5 px-4 py-2.5 rounded-xl text-[13px] font-semibold
-                    transition-all duration-200
-                    ${deleteMatch && !isDeleting
-                      ? 'bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-900/40 cursor-pointer'
-                      : 'bg-zinc-800 text-zinc-600 cursor-not-allowed'
-                    }`}
-                >
-                  {isDeleting ? (
-                    <><Loader2 className="w-4 h-4 animate-spin" /> Menghapus...</>
-                  ) : (
-                    <><Trash2 className="w-4 h-4" /> Konfirmasi Hapus</>
-                  )}
-                </motion.button>
+                />
               </div>
             </div>
-          </motion.div>
-        </>
+
+            {/* Footer */}
+            <div className="px-5 pb-5">
+              <motion.button
+                onClick={handleDeletePlaylist}
+                disabled={!deleteMatch || isDeleting}
+                whileTap={deleteMatch && !isDeleting ? { scale: 0.97 } : {}}
+                className={`w-full flex items-center justify-center gap-2.5 px-4 py-2.5 rounded-xl text-[13px] font-semibold
+                  transition-all duration-200
+                  ${deleteMatch && !isDeleting
+                    ? 'bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-900/40 cursor-pointer'
+                    : 'bg-zinc-800 text-zinc-600 cursor-not-allowed'
+                  }`}
+              >
+                {isDeleting ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" /> Menghapus...</>
+                ) : (
+                  <><Trash2 className="w-4 h-4" /> Konfirmasi Hapus</>
+                )}
+              </motion.button>
+            </div>
+          </div>
+        </motion.div>
       )}
     </AnimatePresence>
   </>

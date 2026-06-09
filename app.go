@@ -2087,3 +2087,190 @@ func (a *App) GetTrackPulseDuration(artist string, title string) float64 {
 	return defaultDuration
 }
 
+// GetArtistImageFromDeezer queries the Deezer search API for an artist image by name.
+// Returns the picture_xl URL (1000x1000) or an empty string if not found.
+func (a *App) GetArtistImageFromDeezer(artistName string) string {
+	if artistName == "" {
+		return ""
+	}
+
+	client := newHTTPClient()
+	escapedName := url.QueryEscape(artistName)
+	apiURL := fmt.Sprintf("https://api.deezer.com/search/artist?q=%s", escapedName)
+
+	req, err := http.NewRequest("GET", apiURL, nil)
+	if err != nil {
+		log.Printf("[Deezer] Failed to create request for %s: %v", artistName, err)
+		return ""
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Printf("[Deezer] Failed to fetch artist %s: %v", artistName, err)
+		return ""
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("[Deezer] API returned status %d for %s", resp.StatusCode, artistName)
+		return ""
+	}
+
+	var response struct {
+		Data []struct {
+			Name      string `json:"name"`
+			PictureXL string `json:"picture_xl"`
+		} `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		log.Printf("[Deezer] Failed to decode response for %s: %v", artistName, err)
+		return ""
+	}
+
+	for _, artist := range response.Data {
+		if strings.EqualFold(artistName, artist.Name) {
+			return artist.PictureXL
+		}
+	}
+
+	return ""
+}
+
+// GetArtistImageSmart queries iTunes API for a sample track, then uses both artist and track names
+// for an advanced Deezer search to resolve name collisions.
+func (a *App) GetArtistImageSmart(artistName string, itunesArtistId int64) string {
+	if artistName == "" || itunesArtistId == 0 {
+		return ""
+	}
+
+	client := newHTTPClient()
+
+	// Step A: iTunes Lookup
+	itunesURL := fmt.Sprintf("https://itunes.apple.com/lookup?id=%d&entity=song&limit=1", itunesArtistId)
+	reqITunes, err := http.NewRequest("GET", itunesURL, nil)
+	if err != nil {
+		log.Printf("[iTunes] Failed to create request for artist %d: %v", itunesArtistId, err)
+		return ""
+	}
+
+	respITunes, err := client.Do(reqITunes)
+	if err != nil {
+		log.Printf("[iTunes] Failed to fetch artist %d: %v", itunesArtistId, err)
+		return ""
+	}
+	defer respITunes.Body.Close()
+
+	if respITunes.StatusCode != http.StatusOK {
+		log.Printf("[iTunes] API returned status %d for artist %d", respITunes.StatusCode, itunesArtistId)
+		return ""
+	}
+
+	var itunesResponse struct {
+		Results []struct {
+			WrapperType string `json:"wrapperType"`
+			TrackName   string `json:"trackName"`
+		} `json:"results"`
+	}
+
+	if err := json.NewDecoder(respITunes.Body).Decode(&itunesResponse); err != nil {
+		log.Printf("[iTunes] Failed to decode response for artist %d: %v", itunesArtistId, err)
+		return ""
+	}
+
+	var sampleTrack string
+	for _, res := range itunesResponse.Results {
+		if res.WrapperType == "track" && res.TrackName != "" {
+			sampleTrack = res.TrackName
+			break
+		}
+	}
+
+	if sampleTrack == "" {
+		log.Printf("[GetArtistImageSmart] No sample track found for artist %s (ID: %d)", artistName, itunesArtistId)
+		return ""
+	}
+
+	// Step B: Deezer Advanced Search
+	searchQuery := fmt.Sprintf(`artist:"%s" track:"%s"`, artistName, sampleTrack)
+	escapedQuery := url.QueryEscape(searchQuery)
+	deezerURL := fmt.Sprintf("https://api.deezer.com/search?q=%s", escapedQuery)
+
+	reqDeezer, err := http.NewRequest("GET", deezerURL, nil)
+	if err != nil {
+		log.Printf("[Deezer] Failed to create request for %s: %v", searchQuery, err)
+		return ""
+	}
+
+	respDeezer, err := client.Do(reqDeezer)
+	if err != nil {
+		log.Printf("[Deezer] Failed to fetch search for %s: %v", searchQuery, err)
+		return ""
+	}
+	defer respDeezer.Body.Close()
+
+	if respDeezer.StatusCode != http.StatusOK {
+		log.Printf("[Deezer] API returned status %d for query %s", respDeezer.StatusCode, searchQuery)
+		return ""
+	}
+
+	var deezerResponse struct {
+		Data []struct {
+			Artist struct {
+				Name      string `json:"name"`
+				PictureXL string `json:"picture_xl"`
+			} `json:"artist"`
+		} `json:"data"`
+	}
+
+	if err := json.NewDecoder(respDeezer.Body).Decode(&deezerResponse); err != nil {
+		log.Printf("[Deezer] Failed to decode search response for query %s: %v", searchQuery, err)
+		return ""
+	}
+
+	// Step C: Picture Extraction & Validation
+	for _, track := range deezerResponse.Data {
+		if strings.EqualFold(track.Artist.Name, artistName) {
+			return track.Artist.PictureXL
+		}
+	}
+
+	// Fallback: Artist-only search
+	fallbackQuery := url.QueryEscape(artistName)
+	fallbackURL := fmt.Sprintf("https://api.deezer.com/search/artist?q=%s", fallbackQuery)
+
+	reqFallback, err := http.NewRequest("GET", fallbackURL, nil)
+	if err != nil {
+		log.Printf("[Deezer] Failed to create fallback request for %s: %v", artistName, err)
+		return ""
+	}
+
+	respFallback, err := client.Do(reqFallback)
+	if err != nil {
+		log.Printf("[Deezer] Failed to fetch fallback search for %s: %v", artistName, err)
+		return ""
+	}
+	defer respFallback.Body.Close()
+
+	if respFallback.StatusCode == http.StatusOK {
+		var fallbackResponse struct {
+			Data []struct {
+				Name      string `json:"name"`
+				PictureXL string `json:"picture_xl"`
+			} `json:"data"`
+		}
+
+		if err := json.NewDecoder(respFallback.Body).Decode(&fallbackResponse); err == nil {
+			for _, artist := range fallbackResponse.Data {
+				if strings.EqualFold(artist.Name, artistName) {
+					return artist.PictureXL
+				}
+			}
+		} else {
+			log.Printf("[Deezer] Failed to decode fallback response for %s: %v", artistName, err)
+		}
+	}
+
+	return ""
+}
+

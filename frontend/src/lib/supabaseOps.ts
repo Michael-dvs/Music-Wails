@@ -314,8 +314,7 @@ export async function getPlaylistTracks(playlistId: string): Promise<PlaylistTra
     .from('playlist_tracks')
     .select('*')
     .eq('playlist_id', playlistId)
-    .order('order_index', { ascending: true, nullsFirst: false })
-    .order('added_at', { ascending: true });
+    .order('order_index', { ascending: true });
 
   if (error) {
     console.error('[supabaseOps] getPlaylistTracks failed:', error.message);
@@ -333,19 +332,26 @@ export async function updatePlaylistTrackOrder(
 ): Promise<void> {
   console.log('[supabaseOps] updatePlaylistTrackOrder for playlist', playlistId, trackOrders.length, 'tracks');
   
-  const promises = trackOrders.map(item =>
-    supabase
+  const promises = trackOrders.map(item => {
+    console.log('[supabaseOps] Attempting update:', { playlistId, relationId: item.id, order_index: item.order_index });
+    return supabase
       .from('playlist_tracks')
       .update({ order_index: item.order_index })
-      .eq('playlist_id', playlistId)
       .eq('id', item.id)
-  );
+      .select();
+  });
 
   const results = await Promise.all(promises);
-  for (const r of results) {
+  for (let i = 0; i < results.length; i++) {
+    const r = results[i];
+    const item = trackOrders[i];
     if (r.error) {
       console.error('[supabaseOps] updatePlaylistTrackOrder failed item:', r.error.message);
       throw new Error(r.error.message);
+    }
+    if (!r.data || r.data.length === 0) {
+      console.error('[supabaseOps] updatePlaylistTrackOrder silent failure for relation ID:', item.id);
+      throw new Error(`Silent failure: Track relation ID ${item.id} not found or not updated in playlist ${playlistId}`);
     }
   }
   console.log('[supabaseOps] updatePlaylistTrackOrder ✅');

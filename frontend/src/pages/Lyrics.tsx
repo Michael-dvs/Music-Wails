@@ -122,10 +122,18 @@ export default function Lyrics({ currentSong, currentTime, lyrics, loading, isRe
       
       // Auto scroll only if enabled (Freedom Mode OFF = autoScroll ON)
       if (autoScroll && newActiveIndex >= 0 && lineRefs.current[newActiveIndex]) {
-        lineRefs.current[newActiveIndex]?.scrollIntoView({
-          behavior: 'smooth',
-          block: 'center',
-        });
+        const targetEl = lineRefs.current[newActiveIndex];
+        const containerEl = scrollRef.current;
+        if (targetEl && containerEl) {
+          const targetRect = targetEl.getBoundingClientRect();
+          const containerRect = containerEl.getBoundingClientRect();
+          const offsetToCenter = targetRect.top - containerRect.top - (containerRect.height / 2) + (targetRect.height / 2);
+          
+          containerEl.scrollBy({
+            top: offsetToCenter,
+            behavior: 'smooth'
+          });
+        }
       }
     }
   }, [currentTime, lyrics, activeLine, offset, autoScroll]);

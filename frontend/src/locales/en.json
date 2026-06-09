@@ -1,0 +1,108 @@
+{
+  "common": {
+    "back": "Back",
+    "title": "TITLE"
+  },
+  "sidebar": {
+    "menu": "Menu",
+    "home": "Home",
+    "search": "Search",
+    "library": "Library",
+    "likedSongs": "Liked Songs",
+    "recentlyPlayed": "Recently Played",
+    "topTracks": "Top Tracks",
+    "playlists": "Playlists",
+    "addPlaylist": "Add Playlist",
+    "loginToCreate": "Login to create playlists.",
+    "loading": "Loading...",
+    "noPlaylists": "No playlists yet. Tap + to create one."
+  },
+  "settings": {
+    "title": "Settings",
+    "subtitle": "Configure application preferences and external credentials",
+    "themeTitle": "Display Mode",
+    "themeSubtitle": "Choose the display mode that suits you best and is comfortable for you while playing music.",
+    "lightMode": "Light Mode",
+    "lightModeDesc": "Clean & Bright",
+    "darkMode": "Dark Mode",
+    "darkModeDesc": "Calm & Cozy",
+    "playbackTitle": "Playback",
+    "seamlessPreload": "Seamless Preload",
+    "seamlessPreloadDesc": "Load the next track in the background to prevent pauses between song changes.",
+    "apiQuotaWarning": "Warning: This feature will load the next track in the background. It will still consume YouTube API quota even if you skip or stop the song before the next playback.",
+    "crossfade": "Crossfade Between Songs",
+    "crossfadeDesc": "Smooth fade-out/fade-in transitions during song changes.",
+    "crossfadeDuration": "Crossfade Duration",
+    "crossfadeSeconds": "{{count}} seconds",
+    "crossfadeNote": "Crossfade starts {{count}} seconds before the end of the active song.",
+    "crossfadeHelp": "Enable Seamless Preload first to use this feature.",
+    "apiTitle": "YouTube API Credentials",
+    "apiSubtitle": "API keys are securely stored in your Supabase database, so they will always sync whenever you log in. If API Key 1 encounters quota limits (Error 429), the app will automatically use API Key 2.",
+    "apiKey1": "YouTube API Key 1 (Primary)",
+    "apiKey2": "YouTube API Key 2 (Fallback)",
+    "apiKey2Placeholder": "Optional, used when Key 1 limit reached",
+    "saveSuccess": "API credentials saved successfully!",
+    "saveError": "Failed to save credentials",
+    "saving": "Saving...",
+    "saveBtn": "Save Credentials",
+    "languageTitle": "App Language",
+    "languageSelect": "Select the language used for the app interface:",
+    "systemDefault": "System Default",
+    "english": "English",
+    "indonesian": "Bahasa Indonesia"
+  },
+  "table": {
+    "title": "Title",
+    "artist": "Artist",
+    "date": "Date",
+    "time": "Time",
+    "album": "Album"
+  },
+  "contextMenu": {
+    "playNext": "Play Next",
+    "addToQueue": "Add to Queue",
+    "addToLiked": "Save to Liked Songs",
+    "removeFromLiked": "Remove from Liked",
+    "addToPlaylist": "Add to Playlist",
+    "noPlaylists": "No playlists yet"
+  },
+  "likedSongs": {
+    "title": "Liked Songs",
+    "subtitle": "Playlist",
+    "songCount": "{{count}} songs",
+    "noSongs": "No liked songs yet.",
+    "noSongsDesc": "Tap the ♥ icon on the player bar to save songs."
+  },
+  "history": {
+    "title": "Recently Played",
+    "subtitle": "History",
+    "lastSongs": "Last {{count}} songs",
+    "noHistory": "No play history yet.",
+    "noHistoryDesc": "Play a song for the first time and your history will appear here.",
+    "justNow": "Just now",
+    "minutesAgo": "{{count}} minutes ago",
+    "hoursAgo": "{{count}} hours ago",
+    "daysAgo": "{{count}} days ago"
+  },
+  "artist": {
+    "title": "Artist",
+    "playTopSongs": "Play Top Songs",
+    "popular": "Popular",
+    "noTracks": "No tracks found."
+  },
+  "playlist": {
+    "title": "Playlist",
+    "label": "PLAYLIST",
+    "playAll": "Play All",
+    "songCount": "{{count}} songs",
+    "songCountAndDuration": "{{count}} songs • ~{{minutes}} min"
+  },
+  "home": {
+    "play": "Play",
+    "viewAll": "View All",
+    "seeAll": "See all",
+    "topTracksWorldwide": "Top tracks worldwide",
+    "dailyMix": "DAILY MIX",
+    "trackCount": "{{count}} tracks"
+  }
+}

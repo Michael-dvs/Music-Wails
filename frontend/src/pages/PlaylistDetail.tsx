@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { Play, ArrowLeft, Clock, Music2 } from 'lucide-react';
 import { main } from '../../wailsjs/go/models';
 import { useContextMenu } from '../contexts/ContextMenuContext';
+import { useTranslation } from 'react-i18next';
 
 interface PlaylistDetailProps {
   songs: main.Song[];
@@ -22,6 +23,7 @@ function formatDuration(ms: number): string {
 
 const PlaylistDetail = forwardRef<HTMLDivElement, PlaylistDetailProps>(
   ({ songs, playlistName, playlistColor, onPlaySong, onBack }, ref) => {
+  const { t } = useTranslation();
   const { openContextMenu } = useContextMenu();
   const totalDuration = songs.reduce((acc, s) => acc + (s.duration || 0), 0);
   const totalMinutes = Math.floor(totalDuration / 60000);
@@ -80,17 +82,17 @@ const PlaylistDetail = forwardRef<HTMLDivElement, PlaylistDetailProps>(
           transition={{ delay: 0.15 }}
           className="flex flex-col space-y-3"
         >
-          <span className="text-xs font-semibold uppercase tracking-wider text-black/50 dark:text-white/50">Playlist</span>
+          <span className="text-xs font-semibold uppercase tracking-wider text-black/50 dark:text-white/50">{t('playlist.label')}</span>
           <h1 className="text-4xl md:text-5xl font-bold text-black dark:text-white tracking-tight text-balance">{playlistName}</h1>
           <p className="text-sm text-black/50 dark:text-white/50">
-            {songs.length} songs • ~{totalMinutes} min
+            {t('playlist.songCount', { count: songs.length })} • ~{totalMinutes} min
           </p>
           <button
             onClick={() => songs.length > 0 && onPlaySong(songs[0], songs, 'playlist')}
             className="mt-2 flex items-center space-x-2 bg-brand-500 hover:bg-brand-600 text-black dark:text-white px-6 py-2.5 rounded-full font-semibold shadow-lg shadow-brand-500/20 hover:shadow-brand-500/40 transition-all w-fit hover:scale-105 active:scale-95"
           >
             <Play className="w-5 h-5 fill-black dark:fill-white" />
-            <span>Play All</span>
+            <span>{t('playlist.playAll')}</span>
           </button>
         </motion.div>
       </div>
@@ -100,8 +102,8 @@ const PlaylistDetail = forwardRef<HTMLDivElement, PlaylistDetailProps>(
         {/* Table Header */}
         <div className="grid grid-cols-[40px_1fr_1fr_80px] gap-4 px-4 py-3 border-b border-black/10 dark:border-white/10 text-xs font-semibold uppercase tracking-wider text-gray-500">
           <span className="text-center">#</span>
-          <span>Title</span>
-          <span>Album</span>
+          <span>{t('common.title')}</span>
+          <span>{t('table.album')}</span>
           <span className="flex items-center justify-end">
             <Clock className="w-3.5 h-3.5" />
           </span>

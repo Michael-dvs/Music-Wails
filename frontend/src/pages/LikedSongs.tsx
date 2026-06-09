@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useContextMenu } from '../contexts/ContextMenuContext';
 import { supabase } from '../lib/supabase';
 import type { FavoriteTrack } from '../lib/supabase';
+import { useTranslation } from 'react-i18next';
 
 interface LikedSongsPageProps {
   onPlaySong?: (song: any, queue: any[], source?: 'playlist' | 'search') => void;
@@ -18,6 +19,7 @@ function formatDuration(ms: number): string {
 }
 
 export default function LikedSongsPage({ onPlaySong }: LikedSongsPageProps) {
+  const { t, i18n } = useTranslation();
   const { user } = useAuth();
   const { openContextMenu } = useContextMenu();
   const [tracks, setTracks] = useState<FavoriteTrack[]>([]);
@@ -77,10 +79,10 @@ export default function LikedSongsPage({ onPlaySong }: LikedSongsPageProps) {
             <Heart className="w-10 h-10 text-white fill-white" />
           </div>
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-1">Playlist</p>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Liked Songs</h1>
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-1">{t('likedSongs.subtitle')}</p>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{t('likedSongs.title')}</h1>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-              {isLoading ? '...' : `${tracks.length} lagu`}
+              {isLoading ? '...' : t('likedSongs.songCount', { count: tracks.length })}
             </p>
           </div>
         </div>
@@ -97,17 +99,17 @@ export default function LikedSongsPage({ onPlaySong }: LikedSongsPageProps) {
         ) : tracks.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 gap-3">
             <Heart className="w-14 h-14 text-gray-300 dark:text-gray-700" />
-            <p className="text-gray-500 dark:text-gray-400 font-medium">Belum ada lagu yang disukai.</p>
-            <p className="text-sm text-gray-400 dark:text-gray-600">Tekan ikon ♥ di player bar untuk menyimpan lagu.</p>
+            <p className="text-gray-500 dark:text-gray-400 font-medium">{t('likedSongs.noSongs')}</p>
+            <p className="text-sm text-gray-400 dark:text-gray-600">{t('likedSongs.noSongsDesc')}</p>
           </div>
         ) : (
           <div className="space-y-1">
             {/* Column headers */}
             <div className="grid grid-cols-[auto_1fr_1fr_auto] gap-4 px-4 py-2 text-[11px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-600 border-b border-gray-200 dark:border-white/5 mb-1">
               <span className="w-6 text-center">#</span>
-              <span>Judul</span>
-              <span>Artis</span>
-              <span>Tanggal</span>
+              <span>{t('table.title')}</span>
+              <span>{t('table.artist')}</span>
+              <span>{t('table.date')}</span>
             </div>
 
             <AnimatePresence>
@@ -164,7 +166,7 @@ export default function LikedSongsPage({ onPlaySong }: LikedSongsPageProps) {
 
                   {/* Date */}
                   <p className="text-[12px] text-gray-400 dark:text-gray-600 whitespace-nowrap tabular-nums">
-                    {new Date(track.added_at).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
+                    {new Date(track.added_at).toLocaleDateString(i18n.language.startsWith('id') ? 'id-ID' : 'en-US', { day: '2-digit', month: 'short', year: 'numeric' })}
                   </p>
                 </motion.div>
               ))}

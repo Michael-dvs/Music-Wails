@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Play, Music2, Disc3, User, Loader2 } from 'lucide-react';
 import { main } from '../../wailsjs/go/models';
 import { fetchAPI } from '../lib/fetchAPI';
+import { useTranslation } from 'react-i18next';
 import { useContextMenu } from '../contexts/ContextMenuContext';
 import AlbumDetail from './AlbumDetail';
 import ArtistAvatar from '../components/ArtistAvatar';
@@ -35,6 +36,7 @@ interface ArtistDetailProps {
 
 // ── Skeleton loader for header area ──────────────────────────────
 function HeaderSkeleton({ onBack }: { onBack: () => void }) {
+  const { t } = useTranslation();
   return (
     <div className="w-full h-full flex flex-col overflow-y-auto pb-36 no-scrollbar bg-[var(--app-bg)]">
       <div className="relative w-full px-8 pt-8 pb-12 flex flex-col flex-shrink-0">
@@ -43,7 +45,7 @@ function HeaderSkeleton({ onBack }: { onBack: () => void }) {
           className="w-fit flex items-center space-x-2 mb-8 text-sm text-gray-500 dark:text-gray-400 hover:text-brand-500 transition-colors group"
         >
           <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
-          <span>Back</span>
+          <span>{t('common.back')}</span>
         </button>
         <div className="flex items-end space-x-8">
           {/* Avatar skeleton */}
@@ -74,6 +76,7 @@ export default function ArtistDetail({
   onPlaySong,
   onNavigateToArtist,
 }: ArtistDetailProps) {
+  const { t } = useTranslation();
   const { openContextMenu } = useContextMenu();
 
   // ── Core data states ──
@@ -261,7 +264,7 @@ export default function ArtistDetail({
           className="relative z-10 w-fit flex items-center space-x-2 mb-8 text-sm text-gray-500 dark:text-gray-400 hover:text-brand-500 dark:hover:text-brand-400 transition-colors group"
         >
           <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
-          <span>Back</span>
+          <span>{t('common.back')}</span>
         </motion.button>
 
         {/* Artist identity row */}
@@ -291,7 +294,7 @@ export default function ArtistDetail({
           >
             <span className="text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-gray-400 flex items-center space-x-1.5">
               <User className="w-3.5 h-3.5" />
-              <span>Artist</span>
+              <span>{t('artist.title')}</span>
             </span>
             <h1 className="text-5xl md:text-6xl font-black text-gray-900 dark:text-white tracking-tight leading-none text-balance">
               {artistName}
@@ -305,7 +308,7 @@ export default function ArtistDetail({
               className="mt-2 flex items-center space-x-2 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 disabled:cursor-not-allowed text-white px-6 py-2.5 rounded-full font-semibold shadow-lg shadow-brand-500/30 hover:shadow-brand-500/50 transition-all w-fit hover:scale-105 active:scale-95"
             >
               <Play className="w-5 h-5 fill-white" />
-              <span>Play Top Songs</span>
+              <span>{t('artist.playTopSongs')}</span>
             </button>
           </motion.div>
         </div>
@@ -318,7 +321,7 @@ export default function ArtistDetail({
         <section>
           <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-5 flex items-center space-x-2">
             <Music2 className="w-5 h-5 text-brand-400" />
-            <span>Popular</span>
+            <span>{t('artist.popular')}</span>
           </h2>
 
           {loadingTracks ? (
@@ -328,7 +331,7 @@ export default function ArtistDetail({
               ))}
             </div>
           ) : topTracks.length === 0 ? (
-            <p className="text-gray-500 dark:text-gray-400 text-sm">No tracks found.</p>
+            <p className="text-gray-500 dark:text-gray-400 text-sm">{t('artist.noTracks')}</p>
           ) : (
             <div className="flex flex-col">
               {topTracks.map((track, idx) => (

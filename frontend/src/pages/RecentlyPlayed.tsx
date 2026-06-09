@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Clock, Music2, Play, Loader2 } from 'lucide-react';
 import { GetRecentlyPlayed } from '../../wailsjs/go/main/App';
 import type { main } from '../../wailsjs/go/models';
+import { useTranslation } from 'react-i18next';
 
 interface RecentlyPlayedPageProps {
   onPlaySong?: (song: any, queue: any[], source?: 'playlist' | 'search') => void;
@@ -11,18 +12,19 @@ interface RecentlyPlayedPageProps {
 // Type alias for the Go struct
 type RecentlyPlayedEntry = main.RecentlyPlayedEntry;
 
-function timeAgo(dateStr: string): string {
+function timeAgo(dateStr: string, t: any): string {
   const diff = Date.now() - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60000);
-  if (mins < 1) return 'Baru saja';
-  if (mins < 60) return `${mins} menit lalu`;
+  if (mins < 1) return t('history.justNow');
+  if (mins < 60) return t('history.minutesAgo', { count: mins });
   const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs} jam lalu`;
+  if (hrs < 24) return t('history.hoursAgo', { count: hrs });
   const days = Math.floor(hrs / 24);
-  return `${days} hari lalu`;
+  return t('history.daysAgo', { count: days });
 }
 
 export default function RecentlyPlayedPage({ onPlaySong }: RecentlyPlayedPageProps) {
+  const { t } = useTranslation();
   const [tracks, setTracks] = useState<RecentlyPlayedEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -75,10 +77,10 @@ export default function RecentlyPlayedPage({ onPlaySong }: RecentlyPlayedPagePro
             <Clock className="w-10 h-10 text-white" />
           </div>
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-1">History</p>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Recently Played</h1>
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-1">{t('history.subtitle')}</p>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{t('history.title')}</h1>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-              {isLoading ? '…' : `${tracks.length} lagu terakhir`}
+              {isLoading ? '…' : t('history.lastSongs', { count: tracks.length })}
             </p>
           </div>
         </div>
@@ -95,16 +97,16 @@ export default function RecentlyPlayedPage({ onPlaySong }: RecentlyPlayedPagePro
         ) : tracks.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 gap-3">
             <Clock className="w-14 h-14 text-gray-300 dark:text-gray-700" />
-            <p className="text-gray-500 dark:text-gray-400 font-medium">Belum ada riwayat putar.</p>
-            <p className="text-sm text-gray-400 dark:text-gray-600">Putar lagu pertama kali dan histori akan muncul di sini.</p>
+            <p className="text-gray-500 dark:text-gray-400 font-medium">{t('history.noHistory')}</p>
+            <p className="text-sm text-gray-400 dark:text-gray-600">{t('history.noHistoryDesc')}</p>
           </div>
         ) : (
           <div className="space-y-1">
             <div className="grid grid-cols-[auto_1fr_1fr_auto] gap-4 px-4 py-2 text-[11px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-600 border-b border-gray-200 dark:border-white/5 mb-1">
               <span className="w-6 text-center">#</span>
-              <span>Judul</span>
-              <span>Artis</span>
-              <span>Waktu</span>
+              <span>{t('table.title')}</span>
+              <span>{t('table.artist')}</span>
+              <span>{t('table.time')}</span>
             </div>
             <AnimatePresence>
               {tracks.map((track, idx) => (
@@ -140,7 +142,7 @@ export default function RecentlyPlayedPage({ onPlaySong }: RecentlyPlayedPagePro
                     </p>
                   </div>
                   <p className="text-[13px] text-gray-500 dark:text-gray-400 truncate">{track.artist}</p>
-                  <p className="text-[12px] text-gray-400 dark:text-gray-600 whitespace-nowrap">{timeAgo(track.played_at)}</p>
+                  <p className="text-[12px] text-gray-400 dark:text-gray-600 whitespace-nowrap">{timeAgo(track.played_at, t)}</p>
                 </motion.div>
               ))}
             </AnimatePresence>

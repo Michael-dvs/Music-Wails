@@ -9,6 +9,7 @@ import { getPlaylists } from '../lib/supabaseOps';
 import type { Playlist } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
+import { useTranslation } from 'react-i18next';
 
 interface SidebarProps {
   activeTab: string;
@@ -81,6 +82,7 @@ function SectionLabel({ children, icon: Icon }: { children: React.ReactNode, ico
 
 // ── Main Sidebar ─────────────────────────────────────────────────
 export default function Sidebar({ activeTab, setActiveTab, onAddPlaylist }: SidebarProps) {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const [playlistsOpen, setPlaylistsOpen] = useState(true);
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
@@ -159,20 +161,20 @@ export default function Sidebar({ activeTab, setActiveTab, onAddPlaylist }: Side
 
         {/* ── Menu Section (Home + Search) ─────────────────── */}
         <div className="flex-shrink-0">
-          <SectionLabel>Menu</SectionLabel>
+          <SectionLabel>{t('sidebar.menu')}</SectionLabel>
           <div className="space-y-0.5">
-            <NavItem id="home"   icon={Home}   label="Home"   activeTab={activeTab} setActiveTab={setActiveTab} />
-            <NavItem id="search" icon={Search} label="Search" activeTab={activeTab} setActiveTab={setActiveTab} />
+            <NavItem id="home"   icon={Home}   label={t('sidebar.home')}   activeTab={activeTab} setActiveTab={setActiveTab} />
+            <NavItem id="search" icon={Search} label={t('sidebar.search')} activeTab={activeTab} setActiveTab={setActiveTab} />
           </div>
         </div>
 
         {/* ── Library Section ──────────────────────────────── */}
         <div className="flex-shrink-0">
-          <SectionLabel icon={Library}>Library</SectionLabel>
+          <SectionLabel icon={Library}>{t('sidebar.library')}</SectionLabel>
           <div className="space-y-0.5">
-            <NavItem id="liked"           icon={Heart}      label="Liked Songs"      activeTab={activeTab} setActiveTab={setActiveTab} indent />
-            <NavItem id="recently-played" icon={Clock}      label="Recently Played"  activeTab={activeTab} setActiveTab={setActiveTab} indent />
-            <NavItem id="top-tracks"      icon={TrendingUp} label="Top Tracks"       activeTab={activeTab} setActiveTab={setActiveTab} indent />
+            <NavItem id="liked"           icon={Heart}      label={t('sidebar.likedSongs')}      activeTab={activeTab} setActiveTab={setActiveTab} indent />
+            <NavItem id="recently-played" icon={Clock}      label={t('sidebar.recentlyPlayed')}  activeTab={activeTab} setActiveTab={setActiveTab} indent />
+            <NavItem id="top-tracks"      icon={TrendingUp} label={t('sidebar.topTracks')}       activeTab={activeTab} setActiveTab={setActiveTab} indent />
           </div>
         </div>
 
@@ -182,7 +184,7 @@ export default function Sidebar({ activeTab, setActiveTab, onAddPlaylist }: Side
           <div className="flex items-center gap-2 text-xs font-semibold tracking-widest text-zinc-500 uppercase mb-2 px-3 w-full flex-shrink-0">
             <div className="flex items-center gap-2">
               <ListMusic className="w-4 h-4 flex-shrink-0" />
-              <span>Playlists</span>
+              <span>{t('sidebar.playlists')}</span>
             </div>
             
             <div className="ml-auto flex items-center gap-2">
@@ -204,7 +206,7 @@ export default function Sidebar({ activeTab, setActiveTab, onAddPlaylist }: Side
                   e.stopPropagation();
                   onAddPlaylist();
                 }}
-                title="Add Playlist"
+                title={t('sidebar.addPlaylist') || 'Add Playlist'}
                 className="w-5 h-5 flex items-center justify-center rounded-md text-zinc-500 hover:text-zinc-100 hover:bg-white/10 transition-all duration-150"
               >
                 <Plus className="w-4 h-4" />
@@ -226,15 +228,15 @@ export default function Sidebar({ activeTab, setActiveTab, onAddPlaylist }: Side
                 <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-transparent pr-2 space-y-0.5 pb-1">
                   {!user ? (
                     <p className="pl-[36px] pr-3 py-1.5 text-[11px] text-zinc-500 italic">
-                      Login to create playlists.
+                      {t('sidebar.loginToCreate')}
                     </p>
                   ) : isLoadingPlaylists ? (
                     <p className="pl-[36px] pr-3 py-1.5 text-[11px] text-zinc-500 italic animate-pulse">
-                      Loading...
+                      {t('sidebar.loading')}
                     </p>
                   ) : playlists.length === 0 ? (
                     <p className="pl-[36px] pr-3 py-1.5 text-[11px] text-zinc-500 italic">
-                      No playlists yet. Tap + to create one.
+                      {t('sidebar.noPlaylists')}
                     </p>
                   ) : (
                     playlists.map(playlist => (

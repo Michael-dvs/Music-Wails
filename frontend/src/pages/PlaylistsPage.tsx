@@ -7,6 +7,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useContextMenu } from '../contexts/ContextMenuContext';
 import { supabase } from '../lib/supabase';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
+import { useTranslation } from 'react-i18next';
 
 // ── Shared utility exports ────────────────────────────────────────
 export function getStoragePathFromUrl(url: string, bucketName: string): string | null {
@@ -62,6 +63,7 @@ interface PlaylistsPageProps {
 
 // ── Component ─────────────────────────────────────────────────────
 export default function PlaylistsPage({ initialPlaylistId, onPlaySong, onBack }: PlaylistsPageProps) {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const { openContextMenu } = useContextMenu();
   
@@ -441,7 +443,7 @@ export default function PlaylistsPage({ initialPlaylistId, onPlaySong, onBack }:
           className="absolute top-6 left-6 z-10 flex items-center space-x-1.5 text-sm text-gray-500 dark:text-gray-400 hover:text-brand-500 dark:hover:text-brand-400 transition-colors group"
         >
           <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
-          <span>Back</span>
+          <span>{t('common.back')}</span>
         </motion.button>
 
         {/* Delete Playlist button — top right */}
@@ -509,7 +511,7 @@ export default function PlaylistsPage({ initialPlaylistId, onPlaySong, onBack }:
           className="flex flex-col space-y-3 pb-1 min-w-0"
         >
           <span className="text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-gray-400">
-            Playlist
+            {t('playlist.label')}
           </span>
           {loading ? (
             <div className="h-12 w-64 rounded-lg bg-black/10 dark:bg-white/10 animate-pulse" />
@@ -539,7 +541,7 @@ export default function PlaylistsPage({ initialPlaylistId, onPlaySong, onBack }:
             </span>
             <span className="text-gray-400">·</span>
             <span className="text-gray-500 dark:text-gray-400">
-              {tracks.length} {tracks.length === 1 ? 'song' : 'songs'}
+              {t('playlist.songCount', { count: tracks.length })}
             </span>
           </div>
 
@@ -549,7 +551,7 @@ export default function PlaylistsPage({ initialPlaylistId, onPlaySong, onBack }:
             className="mt-1 flex items-center space-x-2 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 disabled:cursor-not-allowed text-white px-6 py-2.5 rounded-full font-semibold shadow-lg shadow-brand-500/30 transition-all hover:scale-105 active:scale-95 w-fit"
           >
             <Play className="w-5 h-5 fill-white" />
-            <span>Play All</span>
+            <span>{t('playlist.playAll')}</span>
           </button>
         </motion.div>
       </div>
@@ -559,7 +561,7 @@ export default function PlaylistsPage({ initialPlaylistId, onPlaySong, onBack }:
         <div className="grid grid-cols-[32px_32px_1fr_80px_40px] gap-4 px-4 py-3 border-b border-black/10 dark:border-white/10 text-xs font-semibold uppercase tracking-wider text-gray-500">
           <span></span>
           <span className="text-center">#</span>
-          <span>Title</span>
+          <span>{t('common.title')}</span>
           <span className="flex items-center justify-end">
             <Clock className="w-3.5 h-3.5" />
           </span>

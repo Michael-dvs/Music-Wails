@@ -15,6 +15,7 @@ import { Play, Heart, ListPlus, ListEnd, ChevronRight, Loader2, Check } from 'lu
 import { toggleFavorite, addTrackToPlaylist, getPlaylists } from '../lib/supabaseOps';
 import { useAuth } from '../contexts/AuthContext';
 import type { Playlist } from '../lib/supabase';
+import { useTranslation } from 'react-i18next';
 
 // ── Song data shape expected by context menu ────────────────────
 export interface ContextMenuSongData {
@@ -52,6 +53,7 @@ function PlaylistSubMenu({
   onSelect: (playlistId: string, playlistName: string) => void;
   addStatus: Record<string, 'idle' | 'loading' | 'done'>;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="min-w-[180px] max-w-[220px] rounded-xl shadow-2xl shadow-black/50 border border-white/10 bg-[#1e1e1e] py-1.5 overflow-hidden">
       {isLoading ? (
@@ -59,7 +61,7 @@ function PlaylistSubMenu({
           <Loader2 className="w-4 h-4 animate-spin text-zinc-400" />
         </div>
       ) : playlists.length === 0 ? (
-        <p className="px-4 py-3 text-xs text-zinc-500 italic">No playlists yet</p>
+        <p className="px-4 py-3 text-xs text-zinc-500 italic">{t('contextMenu.noPlaylists')}</p>
       ) : (
         <div
           className="max-h-48 overflow-y-auto space-y-0.5 px-1"
@@ -96,6 +98,7 @@ function PlaylistSubMenu({
 
 // ── Main Context Menu Component ──────────────────────────────────
 const ContextMenu = forwardRef<HTMLDivElement, ContextMenuProps>(({ state, onClose, onPlayNext, onAddQueue }, ref) => {
+  const { t } = useTranslation();
   const { user, isFavorited, refreshFavorites } = useAuth();
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -288,7 +291,7 @@ const ContextMenu = forwardRef<HTMLDivElement, ContextMenuProps>(({ state, onClo
           {/* Play Next */}
           <MenuButton
             icon={<Play className="w-4 h-4" />}
-            label="Play Next"
+            label={t('contextMenu.playNext')}
             onClick={handlePlayNext}
           />
 
@@ -296,7 +299,7 @@ const ContextMenu = forwardRef<HTMLDivElement, ContextMenuProps>(({ state, onClo
           {onAddQueue && (
             <MenuButton
               icon={<ListEnd className="w-4 h-4" />}
-              label="Add to Queue"
+              label={t('contextMenu.addToQueue')}
               onClick={handleAddQueue}
             />
           )}
@@ -312,7 +315,7 @@ const ContextMenu = forwardRef<HTMLDivElement, ContextMenuProps>(({ state, onClo
                 <Heart className="w-4 h-4" />
               )
             }
-            label={alreadyFavorited ? 'Remove from Liked' : 'Save to Liked Songs'}
+            label={alreadyFavorited ? t('contextMenu.removeFromLiked') : t('contextMenu.addToLiked')}
             onClick={handleToggleLike}
             disabled={likeStatus === 'loading'}
             accent={alreadyFavorited}
@@ -326,7 +329,7 @@ const ContextMenu = forwardRef<HTMLDivElement, ContextMenuProps>(({ state, onClo
           >
             <MenuButton
               icon={<ListPlus className="w-4 h-4" />}
-              label="Add to Playlist"
+              label={t('contextMenu.addToPlaylist')}
               suffix={<ChevronRight className="w-3.5 h-3.5 text-zinc-500" />}
               onClick={() => handleShowPlaylistMenu()}
             />

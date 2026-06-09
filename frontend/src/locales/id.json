@@ -1,0 +1,108 @@
+{
+  "common": {
+    "back": "Kembali",
+    "title": "JUDUL"
+  },
+  "sidebar": {
+    "menu": "Menu",
+    "home": "Beranda",
+    "search": "Cari",
+    "library": "Library",
+    "likedSongs": "Lagu Disukai",
+    "recentlyPlayed": "Baru Diputar",
+    "topTracks": "Lagu Terpopuler",
+    "playlists": "Playlist",
+    "addPlaylist": "Tambah Playlist",
+    "loginToCreate": "Login untuk membuat playlist.",
+    "loading": "Memuat...",
+    "noPlaylists": "Belum ada playlist. Ketuk + untuk membuat baru."
+  },
+  "settings": {
+    "title": "Pengaturan",
+    "subtitle": "Konfigurasi preferensi aplikasi dan kredensial eksternal",
+    "themeTitle": "Mode Tampilan",
+    "themeSubtitle": "Pilih mode tampilan yang paling sesuai dan nyaman untuk kamu saat memutar musik.",
+    "lightMode": "Light Mode",
+    "lightModeDesc": "Bersih & Terang",
+    "darkMode": "Dark Mode",
+    "darkModeDesc": "Tenang & Teduh",
+    "playbackTitle": "Pemutaran",
+    "seamlessPreload": "Seamless Preload",
+    "seamlessPreloadDesc": "Muat lagu berikutnya di latar belakang biar nggak ada jeda pas pergantian lagu.",
+    "apiQuotaWarning": "Peringatan: Fitur ini bakal memuat lagu berikutnya di latar belakang. Ini bakal tetap makan kuota API YouTube meskipun kamu skip atau stop lagunya sebelum putar berikutnya.",
+    "crossfade": "Crossfade Antar Lagu",
+    "crossfadeDesc": "Transisi fade-out/fade-in yang mulus pas pergantian lagu.",
+    "crossfadeDuration": "Durasi Crossfade",
+    "crossfadeSeconds": "{{count}} detik",
+    "crossfadeNote": "Crossfade mulai {{count}} detik sebelum lagu selesai.",
+    "crossfadeHelp": "Aktifkan Seamless Preload dulu untuk pakai fitur ini.",
+    "apiTitle": "Kredensial API YouTube",
+    "apiSubtitle": "Kunci API disimpan dengan aman di database Supabase kamu, jadi bakal selalu sinkron kapan pun kamu login. Kalau API Key 1 kena kuota limit (Error 429), aplikasi otomatis pakai API Key 2.",
+    "apiKey1": "YouTube API Key 1 (Primary)",
+    "apiKey2": "YouTube API Key 2 (Fallback)",
+    "apiKey2Placeholder": "Opsional, dipakai pas Key 1 limit",
+    "saveSuccess": "Kredensial API berhasil disimpan!",
+    "saveError": "Gagal menyimpan kredensial",
+    "saving": "Menyimpan...",
+    "saveBtn": "Simpan Kredensial",
+    "languageTitle": "Bahasa Aplikasi",
+    "languageSelect": "Pilih bahasa untuk tampilan aplikasi:",
+    "systemDefault": "Sistem (Default)",
+    "english": "English",
+    "indonesian": "Bahasa Indonesia"
+  },
+  "table": {
+    "title": "Judul",
+    "artist": "Artis",
+    "date": "Tanggal",
+    "time": "Waktu",
+    "album": "Album"
+  },
+  "contextMenu": {
+    "playNext": "Putar Selanjutnya",
+    "addToQueue": "Tambahkan ke Antrean",
+    "addToLiked": "Simpan ke Lagu Disukai",
+    "removeFromLiked": "Hapus dari Lagu Disukai",
+    "addToPlaylist": "Tambahkan ke Playlist",
+    "noPlaylists": "Belum ada playlist"
+  },
+  "likedSongs": {
+    "title": "Lagu Disukai",
+    "subtitle": "Playlist",
+    "songCount": "{{count}} lagu",
+    "noSongs": "Belum ada lagu yang disukai.",
+    "noSongsDesc": "Tekan ikon ♥ di player bar untuk menyimpan lagu."
+  },
+  "history": {
+    "title": "Baru Diputar",
+    "subtitle": "Riwayat",
+    "lastSongs": "{{count}} lagu terakhir",
+    "noHistory": "Belum ada riwayat putar.",
+    "noHistoryDesc": "Putar lagu pertama kali dan histori akan muncul di sini.",
+    "justNow": "Baru saja",
+    "minutesAgo": "{{count}} menit lalu",
+    "hoursAgo": "{{count}} jam lalu",
+    "daysAgo": "{{count}} hari lalu"
+  },
+  "artist": {
+    "title": "Artis",
+    "playTopSongs": "Putar Terpopuler",
+    "popular": "Populer",
+    "noTracks": "Lagu tidak ditemukan."
+  },
+  "playlist": {
+    "title": "Playlist",
+    "label": "PLAYLIST",
+    "playAll": "Putar Semua",
+    "songCount": "{{count}} lagu",
+    "songCountAndDuration": "{{count}} lagu • ~{{minutes}} menit"
+  },
+  "home": {
+    "play": "Putar",
+    "viewAll": "Lihat Semua",
+    "seeAll": "Lihat semua",
+    "topTracksWorldwide": "Lagu terpopuler global",
+    "dailyMix": "MIX HARIAN",
+    "trackCount": "{{count}} lagu"
+  }
+}

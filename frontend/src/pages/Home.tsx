@@ -5,6 +5,7 @@ import { main } from '../../wailsjs/go/models';
 import { GetPlaylist } from '../../wailsjs/go/main/App';
 import PlaylistDetail from './PlaylistDetail';
 import { useContextMenu } from '../contexts/ContextMenuContext';
+import { useTranslation } from 'react-i18next';
 
 const CATEGORIES = [
   { id: 'global', name: 'Global Hits', subtitle: 'Top tracks worldwide', icon: <Globe2 className="w-6 h-6" />, gradient: 'from-blue-600 via-indigo-600 to-purple-700', accentColor: '#6366f1' },
@@ -19,6 +20,7 @@ interface CategoryData {
 }
 
 export default function Home({ onPlaySong }: { onPlaySong: (song: main.Song, queue: main.Song[], source: 'playlist' | 'search') => void }) {
+  const { t } = useTranslation();
   const [categoryData, setCategoryData] = useState<Record<string, CategoryData>>({});
   const [heroLoading, setHeroLoading] = useState(true);
   const [selectedPlaylist, setSelectedPlaylist] = useState<string | null>(null);
@@ -119,13 +121,14 @@ export default function Home({ onPlaySong }: { onPlaySong: (song: main.Song, que
                 className="flex flex-col space-y-3 pb-2"
               >
                 <div className="flex items-center space-x-2">
-                  <Sparkles className="w-4 h-4 text-brand-400" />
-                  <span className="text-xs font-semibold uppercase tracking-widest text-brand-300">Daily Mix</span>
+                  <span className="text-xs font-semibold uppercase tracking-widest text-brand-300">{t('home.dailyMix')}</span>
                 </div>
                 <h1 className="text-4xl md:text-5xl font-bold text-white tracking-tight leading-tight text-balance">
                   {heroCategory.name}
                 </h1>
-                <p className="text-white/70 text-sm">{heroSongs.length} tracks • {heroCategory.subtitle}</p>
+                <p className="text-white/70 text-sm">
+                  {t('home.trackCount', { count: heroSongs.length })} • {heroCategory.subtitle === 'Top tracks worldwide' ? t('home.topTracksWorldwide') : heroCategory.subtitle}
+                </p>
                 <div className="flex items-center space-x-3 mt-2">
                   <button 
                     onClick={(e) => {
@@ -136,7 +139,7 @@ export default function Home({ onPlaySong }: { onPlaySong: (song: main.Song, que
                     className="flex items-center space-x-2 bg-brand-500 hover:bg-brand-600 text-white px-6 py-2.5 rounded-full font-semibold shadow-lg shadow-brand-500/30 hover:shadow-brand-500/50 transition-all hover:scale-105 active:scale-95"
                   >
                     <Play className="w-5 h-5 fill-white" />
-                    <span>Play</span>
+                    <span>{t('home.play')}</span>
                   </button>
                   <button 
                     onClick={(e) => {
@@ -145,7 +148,7 @@ export default function Home({ onPlaySong }: { onPlaySong: (song: main.Song, que
                     }}
                     className="text-white/70 hover:text-white text-sm underline underline-offset-4 decoration-white/20 hover:decoration-white/50 transition-all"
                   >
-                    View All
+                    {t('home.viewAll')}
                   </button>
                 </div>
               </motion.div>
@@ -179,14 +182,16 @@ export default function Home({ onPlaySong }: { onPlaySong: (song: main.Song, que
                     {/* FIX: text-gray-900 untuk judul kategori di Light Mode */}
                     <h2 className="text-xl font-bold text-gray-900 dark:text-white">{cat.name}</h2>
                     {/* FIX: text-gray-500 untuk subtitle di Light Mode */}
-                    <p className="text-xs text-gray-500 dark:text-gray-400">{cat.subtitle}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      {cat.subtitle === 'Top tracks worldwide' ? t('home.topTracksWorldwide') : cat.subtitle}
+                    </p>
                   </div>
                 </div>
                 <button 
                   onClick={() => handlePlaylistClick(cat.id)}
                   className="flex items-center space-x-1 text-sm text-gray-600 dark:text-gray-400 hover:text-brand-600 dark:hover:text-brand-400 transition-colors group"
                 >
-                  <span>See all</span>
+                  <span>{t('home.seeAll')}</span>
                   <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
                 </button>
               </div>

@@ -4,6 +4,7 @@ import { main } from '../../wailsjs/go/models';
 import { SearchSongs } from '../../wailsjs/go/main/App';
 import { motion, AnimatePresence } from 'framer-motion';
 import { fetchAPI } from '../lib/fetchAPI';
+import { fetchArtistImage } from '../lib/artistImage';
 import AlbumDetail, { getAvatarColor, getInitials, getHighResArtwork } from './AlbumDetail';
 
 const ANIMATED_PLACEHOLDERS = [
@@ -47,6 +48,7 @@ interface ItunesArtist {
   artistName: string;
   primaryGenreName?: string;
   artistLinkUrl?: string;
+  avatarUrl?: string;
 }
 
 export default function Search({
@@ -97,20 +99,33 @@ export default function Search({
         setLoading(true);
         setLoadingAlbums(true);
         try {
-          const [songs, artistRes, albumRes] = await Promise.all([
+          const [songs, rawArtists, albumRes] = await Promise.all([
             SearchSongs(query).catch(() => []),
-            fetchAPI<any>(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=musicArtist&limit=5&country=id`)
+            fetchAPI<any>(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=musicArtist&limit=6&country=id`)
               .then(d => (d.results ?? []) as ItunesArtist[])
               .catch(() => [] as ItunesArtist[]),
             fetchAPI<any>(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=album&limit=10&country=id`)
               .then(d => d.results ?? [])
               .catch(() => []),
           ]);
+
+          // Fetch foto profil artis secara paralel
+          const enrichedArtists = await Promise.all(
+            rawArtists.map(async (art) => {
+              try {
+                const avatar = await fetchArtistImage(art.artistName, art.artistId);
+                return { ...art, avatarUrl: avatar || undefined };
+              } catch {
+                return art;
+              }
+            })
+          );
+
           setResults(songs || []);
-          setArtists(artistRes);
+          setArtists(enrichedArtists);
           setAlbums(albumRes);
           // Save to history on successful search
-          if ((songs && songs.length > 0) || artistRes.length > 0 || albumRes.length > 0) {
+          if ((songs && songs.length > 0) || rawArtists.length > 0 || albumRes.length > 0) {
             saveSearchHistory(query.trim());
             setHistory(getSearchHistory());
           }
@@ -282,12 +297,23 @@ export default function Search({
                       {/* Ring lives on the w-20 circle itself, not the button wrapper */}
                       <div
                         className={`w-20 h-20 rounded-full bg-gradient-to-br ${gradient}
-                          flex items-center justify-center shadow-md select-none
+                          flex items-center justify-center shadow-md select-none overflow-hidden relative
                           group-hover:scale-110 group-hover:shadow-xl transition-all duration-300
                           group-focus-visible:ring-2 group-focus-visible:ring-brand-500
                           group-focus-visible:ring-offset-2 group-focus-visible:ring-offset-[var(--app-bg)]`}
                       >
-                        <span className="text-xl font-black text-white/90 leading-none tracking-tight">
+                        {artist.avatarUrl ? (
+                          <img
+                            src={artist.avatarUrl}
+                            alt={artist.artistName}
+                            className="w-full h-full object-cover"
+                            loading="lazy"
+                            onError={(e) => {
+                              (e.target as HTMLElement).style.display = 'none';
+                            }}
+                          />
+                        ) : null}
+                        <span className={`text-xl font-black text-white/90 leading-none tracking-tight ${artist.avatarUrl ? 'hidden' : 'block'}`}>
                           {initials}
                         </span>
                       </div>

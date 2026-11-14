@@ -1,52 +1,8 @@
-import { useState, useEffect } from 'react';
-import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
-import { supabase } from '../lib/supabase';
-import { Settings as SettingsIcon, Save, Moon, Sun, Key, Loader2, Info, Zap } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { Settings as SettingsIcon, Moon, Sun, Zap, CheckCircle2, Music2 } from 'lucide-react';
 
 export default function Settings() {
-  const { profile, refreshProfile } = useAuth();
   const { theme, toggleTheme } = useTheme();
-  
-  const [key1, setKey1] = useState(profile?.youtube_api_key_1 || '');
-  const [key2, setKey2] = useState(profile?.youtube_api_key_2 || '');
-  const [isSaving, setIsSaving] = useState(false);
-  const [saveMessage, setSaveMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
-
-  useEffect(() => {
-    if (profile) {
-      setKey1(profile.youtube_api_key_1 || '');
-      setKey2(profile.youtube_api_key_2 || '');
-    }
-  }, [profile]);
-
-  const saveKeys = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!profile) return;
-    setIsSaving(true);
-    setSaveMessage(null);
-
-    try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          youtube_api_key_1: key1,
-          youtube_api_key_2: key2
-        })
-        .eq('id', profile.id);
-
-      if (error) throw error;
-      
-      await refreshProfile();
-      setSaveMessage({ type: 'success', text: 'Kredensial API berhasil disimpan!' });
-      setTimeout(() => setSaveMessage(null), 3000);
-    } catch (err: any) {
-      setSaveMessage({ type: 'error', text: err.message || 'Gagal menyimpan kredensial' });
-    } finally {
-      setIsSaving(false);
-    }
-  };
 
   return (
     <div className="w-full h-full p-8 overflow-y-auto text-gray-900 dark:text-white bg-white dark:bg-[#121212]">
@@ -59,7 +15,7 @@ export default function Settings() {
           </div>
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Pengaturan</h1>
-            <p className="text-gray-500 dark:text-gray-400 mt-1">Konfigurasi preferensi aplikasi dan kredensial eksternal</p>
+            <p className="text-gray-500 dark:text-gray-400 mt-1">Konfigurasi preferensi aplikasi dan status pemutar musik</p>
           </div>
         </div>
 
@@ -71,9 +27,9 @@ export default function Settings() {
           </h2>
           <div className="bg-gray-100 dark:bg-white/5 border border-black/5 dark:border-white/10 rounded-2xl p-6 shadow-sm space-y-6">
             <div>
-              <h3 className="font-medium text-lg">Mode Tampilan</h3>
+              <h3 className="font-medium text-lg">Tema Visual</h3>
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                Pilih mode tampilan yang paling sesuai dan nyaman untuk Anda saat memutar musik.
+                Pilih mode tampilan yang paling nyaman untuk Anda saat mendengarkan musik.
               </p>
             </div>
             
@@ -127,97 +83,53 @@ export default function Settings() {
           </div>
         </section>
 
-        {/* API Credentials Settings */}
+        {/* Music Player Engine Information */}
         <section className="space-y-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold flex items-center space-x-2">
-              <Key className="w-5 h-5 text-brand-500" />
-              <span>Kredensial API YouTube (Opsional)</span>
-            </h2>
-          </div>
+          <h2 className="text-xl font-semibold flex items-center space-x-2">
+            <Music2 className="w-5 h-5 text-brand-500" />
+            <span>Mesin Streaming Musik</span>
+          </h2>
 
-          {/* Innertube Active Engine Badge */}
-          <div className="bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-transparent border border-emerald-500/25 rounded-2xl p-5 flex items-start space-x-4 shadow-sm">
-            <div className="w-10 h-10 rounded-xl bg-emerald-500 text-white flex items-center justify-center flex-shrink-0 shadow-md shadow-emerald-500/30">
-              <Zap className="w-5 h-5 fill-white" />
-            </div>
-            <div>
-              <h3 className="text-sm font-bold text-gray-900 dark:text-white flex items-center space-x-2">
-                <span>Engine YouTube Innertube Aktif</span>
-                <span className="text-[10px] bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-semibold px-2 py-0.5 rounded-full">
-                  Bebas API Key
-                </span>
-              </h3>
-              <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 leading-relaxed">
-                Aplikasi kini otomatis menggunakan <strong>YouTube Innertube Engine</strong> (seperti BitChord). Semua lagu diputar dalam durasi penuh dan kualitas tinggi secara langsung tanpa perlu registrasi atau membuat API Key di Google Developers.
-              </p>
-            </div>
-          </div>
-          
-          <div className="bg-brand-500/5 border border-brand-500/20 rounded-2xl p-4 flex items-start space-x-3">
-            <Info className="w-5 h-5 text-brand-500 flex-shrink-0 mt-0.5" />
-            <p className="text-xs text-brand-600 dark:text-brand-400 leading-relaxed">
-              <strong>Kredensial Kustom:</strong> Anda tidak wajib mengisi kolom di bawah ini. Kolom ini hanya disediakan jika Anda memiliki kuota YouTube Data API v3 pribadi yang ingin diprioritaskan sebelum fallback otomatis ke Innertube engine.
-            </p>
-          </div>
-
-          <form onSubmit={saveKeys} className="bg-gray-100 dark:bg-white/5 border border-black/5 dark:border-white/10 rounded-2xl p-6 shadow-sm space-y-6">
-            
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  YouTube API Key 1 (Opsional / Override)
-                </label>
-                <input
-                  type="password"
-                  value={key1}
-                  onChange={(e) => setKey1(e.target.value)}
-                  placeholder="Kosongkan untuk engine otomatis, atau masukkan AIzaSy..."
-                  className="w-full bg-white dark:bg-[#1c1c1e] border border-gray-300 dark:border-white/10 rounded-xl px-4 py-3 
-                           focus:outline-none focus:ring-2 focus:ring-brand-500 transition-shadow text-black dark:text-white text-sm"
-                />
+          <div className="bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-transparent border border-emerald-500/25 rounded-2xl p-6 shadow-sm space-y-4">
+            <div className="flex items-start space-x-4">
+              <div className="w-12 h-12 rounded-xl bg-emerald-500 text-white flex items-center justify-center flex-shrink-0 shadow-md shadow-emerald-500/30">
+                <Zap className="w-6 h-6 fill-white" />
               </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  YouTube API Key 2 (Opsional / Cadangan)
-                </label>
-                <input
-                  type="password"
-                  value={key2}
-                  onChange={(e) => setKey2(e.target.value)}
-                  placeholder="Kosongkan untuk engine otomatis..."
-                  className="w-full bg-white dark:bg-[#1c1c1e] border border-gray-300 dark:border-white/10 rounded-xl px-4 py-3 
-                           focus:outline-none focus:ring-2 focus:ring-brand-500 transition-shadow text-black dark:text-white text-sm"
-                />
+              <div className="flex-1">
+                <div className="flex items-center space-x-2">
+                  <h3 className="text-base font-bold text-gray-900 dark:text-white">
+                    YouTube Innertube Engine (BitChord-Style)
+                  </h3>
+                  <span className="text-[11px] bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-semibold px-2.5 py-0.5 rounded-full flex items-center space-x-1">
+                    <CheckCircle2 className="w-3 h-3" />
+                    <span>Aktif Otomatis</span>
+                  </span>
+                </div>
+                <p className="text-xs text-gray-600 dark:text-gray-400 mt-1.5 leading-relaxed">
+                  Aplikasi memutar musik secara otomatis menggunakan <strong>YouTube Innertube Engine</strong>. Semua lagu diputar dalam durasi penuh dengan kualitas audio tinggi secara langsung tanpa memerlukan registrasi, biaya, atau pembuatan Google Cloud API Key.
+                </p>
               </div>
             </div>
 
-            {saveMessage && (
-              <motion.div 
-                initial={{ opacity: 0, y: -10 }} 
-                animate={{ opacity: 1, y: 0 }}
-                className={`p-4 rounded-xl text-sm font-medium ${
-                  saveMessage.type === 'success' 
-                    ? 'bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20' 
-                    : 'bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20'
-                }`}
-              >
-                {saveMessage.text}
-              </motion.div>
-            )}
-
-            <div className="flex justify-end pt-2">
-              <button
-                type="submit"
-                disabled={isSaving}
-                className="flex items-center space-x-2 bg-brand-500 hover:bg-brand-600 text-white px-6 py-2.5 rounded-full font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                <span>{isSaving ? 'Menyimpan...' : 'Simpan Kredensial'}</span>
-              </button>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-emerald-500/15">
+              <div className="flex items-center space-x-2.5 text-xs text-gray-600 dark:text-gray-300">
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                <span>Bebas Google Developer API Key</span>
+              </div>
+              <div className="flex items-center space-x-2.5 text-xs text-gray-600 dark:text-gray-300">
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                <span>Pemutaran Berdurasi Penuh (Full Stream)</span>
+              </div>
+              <div className="flex items-center space-x-2.5 text-xs text-gray-600 dark:text-gray-300">
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                <span>Audio AAC Murni (High Quality)</span>
+              </div>
+              <div className="flex items-center space-x-2.5 text-xs text-gray-600 dark:text-gray-300">
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                <span>Dukungan Autoplay & Smart Shuffle</span>
+              </div>
             </div>
-          </form>
+          </div>
         </section>
 
       </div>

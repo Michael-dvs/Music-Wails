@@ -20,15 +20,12 @@ import (
 	"unicode"
 
 	"github.com/kkdai/youtube/v2"
-	google_youtube "google.golang.org/api/youtube/v3"
-	"google.golang.org/api/option"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 
 const (
 	lastFMAPIKey    = "9843ca4442b8b4a0127aa345029e9bb4"
-	youtubeAPIKey   = "AIzaSyCJyW26ijIS9hNIodGrDLEyDiuXnmoHxK0"
 	lastFMBaseURL   = "https://ws.audioscrobbler.com/2.0/"
 )
 
@@ -986,70 +983,23 @@ func searchYouTubeInnertube(query string) (string, error) {
 	return matches[0][1], nil
 }
 
-// GetFullStreamURL — searches YouTube (custom API keys if provided, with automatic Innertube engine fallback)
-// then extracts stream via kkdai.
+// GetFullStreamURL searches YouTube using the high-performance Innertube engine
+// and extracts a progressive stream (itag 18) for native HTML5 audio playback.
 // Returns ("", error) on failure so frontend can fall back to iTunes preview.
 func (a *App) GetFullStreamURL(artist string, title string, key1 string, key2 string) (string, error) {
 	query := fmt.Sprintf("%s %s audio", artist, title)
 
-	var videoID string
-	var err error
-
-	tryKey := func(key string) (string, error) {
-		if key == "" {
-			return "", fmt.Errorf("empty API key")
-		}
-		ytService, err := google_youtube.NewService(context.Background(), option.WithAPIKey(key))
-		if err != nil {
-			return "", err
-		}
-
-		call := ytService.Search.List([]string{"id"}).Q(query).Type("video").MaxResults(1)
-		response, err := call.Do()
-		if err != nil {
-			return "", err
-		}
-
-		if len(response.Items) == 0 {
-			return "", fmt.Errorf("no video found for: %s", query)
-		}
-
-		return response.Items[0].Id.VideoId, nil
-	}
-
-	// Step 1: If user provided custom keys in Settings, attempt them first
-	if key1 != "" {
-		videoID, err = tryKey(key1)
-		if err != nil {
-			fmt.Printf("[YouTube] Key 1 failed (%v), trying Key 2...\n", err)
-			if key2 != "" {
-				videoID, err = tryKey(key2)
-				if err != nil {
-					fmt.Printf("[YouTube] Key 2 failed (%v)\n", err)
-				}
-			}
-		}
-	} else if key2 != "" {
-		videoID, err = tryKey(key2)
-		if err != nil {
-			fmt.Printf("[YouTube] Key 2 failed (%v)\n", err)
-		}
-	}
-
-	// Step 2: If no custom keys provided or both failed/exceeded quota,
-	// resolve seamlessly using YouTube Innertube Engine (BitChord-style zero-API-key search)
-	if videoID == "" {
-		fmt.Printf("[YouTube] Using Innertube engine for '%s'...\n", query)
-		videoID, err = searchYouTubeInnertube(query)
-		if err != nil {
-			fmt.Printf("[YouTube] Innertube search failed: %v\n", err)
-			return "", fmt.Errorf("video search failed: %w", err)
-		}
+	// Step 1: Pure Innertube engine search (BitChord style, zero Google Cloud API keys)
+	fmt.Printf("[YouTube] Searching via Innertube engine for '%s'...\n", query)
+	videoID, err := searchYouTubeInnertube(query)
+	if err != nil {
+		fmt.Printf("[YouTube] Innertube search failed: %v\n", err)
+		return "", fmt.Errorf("video search failed: %w", err)
 	}
 
 	fmt.Printf("[YouTube] Found video ID: %s for '%s'\n", videoID, query)
 
-	// Step 3: Extract audio stream via kkdai
+	// Step 2: Extract audio stream via kkdai
 	ytClient := youtube.Client{}
 	video, err := ytClient.GetVideo(videoID)
 	if err != nil {
@@ -1057,18 +1007,49 @@ func (a *App) GetFullStreamURL(artist string, title string, key1 string, key2 st
 		return "", err
 	}
 
-	formats := video.Formats.WithAudioChannels()
-	if len(formats) == 0 {
-		return "", fmt.Errorf("no audio formats for video %s", videoID)
+	// Prefer Progressive MP4 stream (Itag 18):
+	// Progressive streams are non-DASH MP4 containers containing AAC audio.
+	// Unlike DASH adaptive streams (which YouTube limits to 1MB or chunks),
+	// progressive streams can be continuously streamed directly by HTML5 <audio>
+	// across macOS Safari/WebKit and Windows WebView2 with full seeking support!
+	var selectedFormat *youtube.Format
+	for _, f := range video.Formats {
+		if f.ItagNo == 18 {
+			selectedFormat = &f
+			break
+		}
 	}
-	formats.Sort()
 
-	streamURL, err := ytClient.GetStreamURL(video, &formats[0])
+	// Fallback to any other progressive format with audio
+	if selectedFormat == nil {
+		for _, f := range video.Formats {
+			if f.AudioChannels > 0 && f.FPS > 0 {
+				selectedFormat = &f
+				break
+			}
+		}
+	}
+
+	// Final fallback to audio formats
+	if selectedFormat == nil {
+		audioFormats := video.Formats.WithAudioChannels()
+		if len(audioFormats) > 0 {
+			selectedFormat = &audioFormats[0]
+		}
+	}
+
+	if selectedFormat == nil {
+		return "", fmt.Errorf("no suitable audio formats found for video %s", videoID)
+	}
+
+	streamURL, err := ytClient.GetStreamURL(video, selectedFormat)
 	if err != nil {
 		fmt.Printf("[YouTube] GetStreamURL error: %v\n", err)
 		return "", err
 	}
 
+	fmt.Printf("[YouTube] Stream acquired successfully for '%s' (itag: %d, mime: %s, duration: %v)\n",
+		query, selectedFormat.ItagNo, selectedFormat.MimeType, video.Duration)
 	return streamURL, nil
 }
 

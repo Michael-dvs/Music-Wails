@@ -1,3 +1,4 @@
+import { useState, useEffect, useCallback } from 'react';
 import { Play, Pause, SkipBack, SkipForward, Volume2, Repeat, Shuffle, Video, Loader2, Info, Mic2, Sparkles, ListMusic } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { main } from '../../wailsjs/go/models';
@@ -55,6 +56,10 @@ export default function PlayerBar({
   onNavigateToArtist,
 }: PlayerBarProps) {
   
+  // Scrubbing/dragging state untuk progress slider agar bar merah tidak tertinggal saat di-drag
+  const [isScrubbing, setIsScrubbing] = useState(false);
+  const [scrubValue, setScrubValue] = useState(0);
+
   const togglePlay = () => {
     if (!audioRef.current || !currentSong || streamLoading) return;
     if (isPlaying) {
@@ -65,16 +70,61 @@ export default function PlayerBar({
     setIsPlaying(!isPlaying);
   };
 
-  const handleProgressChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = parseFloat(e.target.value);
+  const getAudioDuration = () => {
+    if (audioRef.current && isFinite(audioRef.current.duration) && audioRef.current.duration > 0) {
+      return audioRef.current.duration;
+    }
+    return 30;
+  };
+
+  const commitSeek = useCallback((val: number) => {
+    setIsScrubbing(false);
     setProgress(val);
     if (audioRef.current) {
-      const duration = audioRef.current.duration && isFinite(audioRef.current.duration) && audioRef.current.duration > 0 
+      const dur = audioRef.current.duration && isFinite(audioRef.current.duration) && audioRef.current.duration > 0 
         ? audioRef.current.duration 
         : 30;
-      audioRef.current.currentTime = (val / 100) * duration;
+      audioRef.current.currentTime = (val / 100) * dur;
+    }
+  }, [audioRef, setProgress]);
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLInputElement>) => {
+    if (streamLoading || !currentSong) return;
+    const val = parseFloat((e.target as HTMLInputElement).value);
+    setIsScrubbing(true);
+    setScrubValue(val);
+  };
+
+  const handleProgressInput = (e: React.FormEvent<HTMLInputElement>) => {
+    const val = parseFloat((e.target as HTMLInputElement).value);
+    setScrubValue(val);
+  };
+
+  const handleProgressChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = parseFloat(e.target.value);
+    setScrubValue(val);
+    if (!isScrubbing) {
+      commitSeek(val);
     }
   };
+
+  const handlePointerUp = (e: React.PointerEvent<HTMLInputElement>) => {
+    if (!isScrubbing) return;
+    const val = parseFloat((e.target as HTMLInputElement).value);
+    commitSeek(val);
+  };
+
+  // Pastikan saat user drag lalu lepas cursor di luar slider, perubahan tetap di-commit
+  useEffect(() => {
+    if (!isScrubbing) return;
+    const onWindowPointerUp = () => {
+      commitSeek(scrubValue);
+    };
+    window.addEventListener('pointerup', onWindowPointerUp);
+    return () => {
+      window.removeEventListener('pointerup', onWindowPointerUp);
+    };
+  }, [isScrubbing, scrubValue, commitSeek]);
 
   const durationStr = () => {
     if (isHighQuality && audioRef.current && isFinite(audioRef.current.duration)) {
@@ -82,6 +132,28 @@ export default function PlayerBar({
     }
     return currentSong ? '0:30' : '0:00';
   };
+
+  // Kalkulasi progress aktif: jika sedang di-drag pakai scrubValue, jika normal pakai prop progress
+  const activeProgress = isScrubbing ? scrubValue : (progress || 0);
+  const clampedProgress = Math.min(Math.max(activeProgress, 0), 100);
+
+  const displayTime = isScrubbing 
+    ? (clampedProgress / 100) * getAudioDuration()
+    : (audioRef.current ? audioRef.current.currentTime : 0);
+
+  // Kalkulasi lebar progress merah agar ujungnya menyatu persis di tengah icon thumb bundar (11px)
+  const progressWidth = clampedProgress <= 0 
+    ? '0%' 
+    : clampedProgress >= 100 
+      ? '100%' 
+      : `calc(${clampedProgress}% + ${(50 - clampedProgress) * 0.11}px)`;
+
+  const volPercent = Math.min(Math.max(volume * 100, 0), 100);
+  const volWidth = volPercent <= 0
+    ? '0%'
+    : volPercent >= 100
+      ? '100%'
+      : `calc(${volPercent}% + ${(50 - volPercent) * 0.11}px)`;
 
   return (
     <div className="h-24 w-full bg-white/80 dark:bg-black/80 backdrop-blur-lg border-t border-gray-200 dark:border-white/10 flex items-center px-6 justify-between z-20 relative flex-shrink-0">
@@ -200,28 +272,35 @@ export default function PlayerBar({
         
         {/* Progress Bar */}
         <div className="flex items-center space-x-3 w-full max-w-md">
-          <span className="text-xs text-gray-500 dark:text-gray-400 w-8 text-right font-medium tabular-nums">
-            {audioRef.current ? formatTime(audioRef.current.currentTime) : '0:00'}
+          <span className="text-xs text-gray-500 dark:text-gray-400 w-8 text-right font-medium tabular-nums select-none">
+            {formatTime(displayTime)}
           </span>
           
-          <div className="relative w-full flex items-center h-3 group cursor-pointer">
-            <div className="absolute w-full h-1 bg-black/10 dark:bg-white/20 rounded-full pointer-events-none" />
+          <div className="relative w-full flex items-center h-4 group cursor-pointer">
+            {/* Background track */}
+            <div className="absolute w-full h-1 group-hover:h-1.5 bg-black/10 dark:bg-white/20 rounded-full pointer-events-none transition-[height] duration-150 ease-out" />
+            {/* Filled progress bar (Merah) — width update instan 0ms tanpa lagging delay */}
             <div 
-              className="absolute h-1 bg-[#FA243C] rounded-full pointer-events-none" 
-              style={{ width: `${progress || 0}%` }} 
+              className="absolute h-1 group-hover:h-1.5 bg-[#FA243C] rounded-full pointer-events-none transition-[height] duration-150 ease-out" 
+              style={{ width: progressWidth }} 
             />
+            {/* Interactive range slider thumb */}
             <input 
               type="range" 
               min="0" 
               max="100" 
-              value={progress || 0}
+              step="0.01"
+              value={clampedProgress}
+              onPointerDown={handlePointerDown}
+              onPointerUp={handlePointerUp}
+              onInput={handleProgressInput}
               onChange={handleProgressChange}
               disabled={streamLoading || !currentSong}
-              className="absolute inset-0 w-full h-full appearance-none bg-transparent cursor-pointer accent-[#FA243C] disabled:opacity-50 m-0 z-10 outline-none border-none shadow-none" 
+              className={`music-slider absolute inset-0 w-full h-full disabled:opacity-50 ${isScrubbing ? 'is-scrubbing' : ''}`} 
             />
           </div>
 
-          <span className="text-xs text-gray-500 dark:text-gray-400 w-8 font-medium tabular-nums">
+          <span className="text-xs text-gray-500 dark:text-gray-400 w-8 font-medium tabular-nums select-none">
             {durationStr()}
           </span>
         </div>
@@ -251,20 +330,27 @@ export default function PlayerBar({
           )}
         </div>
 
-        <Volume2 className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-        <input 
-          type="range" 
-          min="0" 
-          max="100" 
-          value={volume * 100}
-          onChange={(e) => {
-            const val = parseFloat(e.target.value) / 100;
-            setVolume(val);
-            if (audioRef.current) audioRef.current.volume = val;
-          }}
-          // FIX: accent-gray-600 di light mode (karena putih tidak akan terlihat), dan accent-white di dark mode
-          className="w-24 h-1 bg-black/10 dark:bg-white/20 rounded-lg appearance-none cursor-pointer accent-gray-600 dark:accent-white" 
-        />
+        <Volume2 className="w-5 h-5 text-gray-600 dark:text-gray-400 flex-shrink-0" />
+        <div className="relative flex items-center w-24 h-4 group cursor-pointer">
+          <div className="absolute w-full h-1 group-hover:h-1.5 bg-black/10 dark:bg-white/20 rounded-full pointer-events-none transition-[height] duration-150 ease-out" />
+          <div 
+            className="absolute h-1 group-hover:h-1.5 bg-gray-600 dark:bg-white/90 rounded-full pointer-events-none transition-[height] duration-150 ease-out" 
+            style={{ width: volWidth }} 
+          />
+          <input 
+            type="range" 
+            min="0" 
+            max="100" 
+            step="1"
+            value={volPercent}
+            onChange={(e) => {
+              const val = parseFloat(e.target.value) / 100;
+              setVolume(val);
+              if (audioRef.current) audioRef.current.volume = val;
+            }}
+            className="music-slider absolute inset-0 w-full h-full cursor-pointer" 
+          />
+        </div>
       </div>
     </div>
   );

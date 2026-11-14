@@ -492,13 +492,10 @@ function MusicApp() {
       }
     };
 
-    // Try YouTube high-quality stream first
+    // Try YouTube high-quality stream first via Innertube Engine
     try {
-      // Read API keys from ref to always get the latest value (avoids stale closure)
-      const key1 = profileRef.current?.youtube_api_key_1 || '';
-      const key2 = profileRef.current?.youtube_api_key_2 || '';
-      console.log(`[YouTube] Attempting stream with key1=${key1 ? '✓ set' : '✗ empty'}, key2=${key2 ? '✓ set' : '✗ empty'}`);
-      const ytURL = await GetFullStreamURL(song.artist, song.title, key1, key2);
+      console.log(`[YouTube] Fetching full audio stream for "${song.artist} - ${song.title}" via Innertube Engine...`);
+      const ytURL = await GetFullStreamURL(song.artist, song.title, '', '');
       if (ytURL && ytURL.trim() !== '' && audioRef.current) {
         audioRef.current.src = ytURL;
         audioRef.current.play()
@@ -507,15 +504,16 @@ function MusicApp() {
             setIsPlaying(true); 
             setStreamLoading(false); 
           })
-          .catch(() => {
+          .catch((playErr) => {
+            console.error('[YouTube] audio.play() failed:', playErr);
             playFallback();
           });
       } else {
+        console.warn('[YouTube] Empty stream URL returned, falling back to preview');
         playFallback();
       }
     } catch (e: any) {
-      const is429 = String(e).includes('429') || String(e).includes('quota');
-      console.warn(`[YouTube] ${is429 ? 'Rate-limited (429)' : 'Error'} — falling back to iTunes preview`);
+      console.warn('[YouTube] Stream retrieval error, falling back to preview:', e);
       playFallback();
     }
   }, [fetchLyricsBackground]);

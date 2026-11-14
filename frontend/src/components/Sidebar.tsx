@@ -9,6 +9,9 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
+  // Deteksi platform macOS agar layout window control (traffic lights) tidak bertabrakan dengan logo
+  const isMac = typeof navigator !== 'undefined' && (/Mac/i.test(navigator.userAgent) || /Mac/i.test(navigator.platform));
+
   const menuItems = [
     { id: 'home',      icon: Home,      label: 'Home' },
     { id: 'search',    icon: Search,    label: 'Search' },
@@ -18,10 +21,24 @@ export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
 
   return (
     /* BACKGROUND ADAPTIF: Abu-abu super muda di Light Mode, Hitam/Abu-tua di Dark Mode */
-    <div className="w-full h-full flex flex-col p-5 pb-5 z-10 bg-[#F9F9F9]/90 dark:bg-[#1a1a1a]/90 backdrop-blur-lg border-r border-gray-200 dark:border-white/5">
+    <div 
+      className={`w-full h-full flex flex-col px-5 pb-5 z-10 bg-[#F9F9F9]/90 dark:bg-[#1a1a1a]/90 backdrop-blur-lg border-r border-gray-200 dark:border-white/5 relative ${
+        isMac ? 'pt-12' : 'pt-5'
+      }`}
+    >
+      {/* Area draggable di atas untuk mempermudah drag jendela di macOS */}
+      {isMac && (
+        <div 
+          className="w-full h-9 absolute top-0 left-0 z-0 pointer-events-auto"
+          style={{ '--wails-draggable': 'drag' } as React.CSSProperties}
+        />
+      )}
       
       {/* Logo */}
-      <div className="flex items-center space-x-3 mb-8 px-1">
+      <div 
+        className="flex items-center space-x-3 mb-8 px-1 relative z-10 select-none"
+        style={{ '--wails-draggable': 'no-drag' } as React.CSSProperties}
+      >
         <div className="w-10 h-10 rounded-lg overflow-hidden flex items-center justify-center shadow-lg shadow-brand-500/30 flex-shrink-0">
           <motion.img
             src={appIcon}

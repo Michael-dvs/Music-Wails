@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Play, Music2, Disc3, User, Loader2 } from 'lucide-react';
 import { main } from '../../wailsjs/go/models';
 import { fetchAPI } from '../lib/fetchAPI';
+import { fetchArtistImage } from '../lib/artistImage';
 import AlbumDetail from './AlbumDetail';
 import {
   getHighResArtwork,
@@ -80,6 +81,16 @@ export default function ArtistDetail({
   const [albums, setAlbums] = useState<ItunesAlbum[]>([]);
   const [loadingTracks, setLoadingTracks] = useState(false);
   const [loadingAlbums, setLoadingAlbums] = useState(false);
+  const [artistAvatar, setArtistAvatar] = useState<string | null>(null);
+
+  // Fetch artist profile photo
+  useEffect(() => {
+    let cancelled = false;
+    fetchArtistImage(artistName, resolvedArtistId).then((img) => {
+      if (!cancelled && img) setArtistAvatar(img);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [artistName, resolvedArtistId]);
 
   // Album page sub-navigation
   const [selectedAlbum, setSelectedAlbum] = useState<ItunesAlbum | null>(null);
@@ -263,16 +274,25 @@ export default function ArtistDetail({
 
         {/* Artist identity row */}
         <div className="relative z-10 flex items-end space-x-8">
-          {/* Premium color-matched monogram avatar */}
+          {/* Premium avatar: real photo or color-matched monogram fallback */}
           <motion.div
             initial={{ opacity: 0, scale: 0.85 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.08 }}
-            className={`w-44 h-44 rounded-full bg-gradient-to-br ${avatarGradient} flex items-center justify-center shadow-2xl shadow-black/40 flex-shrink-0 select-none`}
+            className={`w-44 h-44 rounded-full bg-gradient-to-br ${avatarGradient} flex items-center justify-center shadow-2xl shadow-black/40 flex-shrink-0 select-none overflow-hidden relative`}
           >
-            <span className="text-5xl font-black text-white/90 leading-none tracking-tighter">
-              {initials}
-            </span>
+            {artistAvatar ? (
+              <img
+                src={artistAvatar}
+                alt={artistName}
+                className="w-full h-full object-cover"
+                onError={() => setArtistAvatar(null)}
+              />
+            ) : (
+              <span className="text-5xl font-black text-white/90 leading-none tracking-tighter">
+                {initials}
+              </span>
+            )}
           </motion.div>
 
           {/* Text info */}

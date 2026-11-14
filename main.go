@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"embed"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/wailsapp/wails/v2"
@@ -19,10 +20,10 @@ var assets embed.FS
 //go:embed .env
 var envContent string
 
-// loadDotEnv reads the embedded .env content and sets each KEY=VALUE as an os environment variable.
-// This is a minimal implementation that avoids adding an external dependency.
-func loadDotEnv() {
-	scanner := bufio.NewScanner(strings.NewReader(envContent))
+// parseEnvString parses env-formatted lines and sets environment variables.
+// Handles both KEY=value and KEY="value" / KEY='value' formats.
+func parseEnvString(content string) {
+	scanner := bufio.NewScanner(strings.NewReader(content))
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if line == "" || strings.HasPrefix(line, "#") {
@@ -34,9 +35,35 @@ func loadDotEnv() {
 		}
 		key := strings.TrimSpace(parts[0])
 		val := strings.TrimSpace(parts[1])
-		// Only set if not already set (env var takes precedence over .env)
-		if os.Getenv(key) == "" {
-			os.Setenv(key, val)
+		// Strip surrounding quotes: KEY="value" or KEY='value' → value
+		if len(val) >= 2 {
+			if (val[0] == '"' && val[len(val)-1] == '"') ||
+				(val[0] == '\'' && val[len(val)-1] == '\'') {
+				val = val[1 : len(val)-1]
+			}
+		}
+		os.Setenv(key, val)
+	}
+}
+
+
+// loadDotEnv reads the embedded .env content and sets each KEY=VALUE as an os environment variable.
+// It also checks for a local .env next to the executable or in the working directory for production overrides.
+func loadDotEnv() {
+	// 1. Load embedded .env (compile-time fallback)
+	parseEnvString(envContent)
+
+	// 2. Load from current working directory if available
+	if content, err := os.ReadFile(".env"); err == nil {
+		parseEnvString(string(content))
+	}
+
+	// 3. Load from next to the executable (production runtime override)
+	if exePath, err := os.Executable(); err == nil {
+		exeDir := filepath.Dir(exePath)
+		localEnvPath := filepath.Join(exeDir, ".env")
+		if content, err := os.ReadFile(localEnvPath); err == nil {
+			parseEnvString(string(content))
 		}
 	}
 }
@@ -56,7 +83,7 @@ func main() {
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},
-		BackgroundColour: &options.RGBA{R: 12, G: 12, B: 12, A: 1},
+		BackgroundColour: &options.RGBA{R: 12, G: 12, B: 12, A: 255},
 		OnStartup:        app.startup,
 		Bind: []interface{}{
 			app,
@@ -67,8 +94,9 @@ func main() {
 			BackdropType:         windows.Mica,
 		},
 		Mac: &mac.Options{
-			WebviewIsTransparent: true,
-			WindowIsTranslucent:  true,
+			TitleBar:             mac.TitleBarHiddenInset(),
+			WebviewIsTransparent: false,
+			WindowIsTranslucent:  false,
 		},
 	})
 

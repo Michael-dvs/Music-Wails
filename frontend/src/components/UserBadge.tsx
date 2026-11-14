@@ -13,9 +13,11 @@ export default function UserBadge({ setActiveTab }: UserBadgeProps) {
   const { user, profile, isAdmin, signOut } = useAuth();
   const [showMenu, setShowMenu] = useState(false);
   const [localProfile, setLocalProfile] = useState(profile);
+  const [avatarError, setAvatarError] = useState(false);
 
   useEffect(() => {
     setLocalProfile(profile);
+    setAvatarError(false);
   }, [profile]);
 
   const fetchUserProfile = async () => {
@@ -114,8 +116,13 @@ export default function UserBadge({ setActiveTab }: UserBadgeProps) {
       >
         {/* Avatar */}
         <div className="w-8 h-8 rounded-full bg-brand-500 flex items-center justify-center flex-shrink-0 text-[11px] font-bold text-white shadow-md shadow-brand-500/20 overflow-hidden">
-          {localProfile?.avatar_url ? (
-            <img src={localProfile.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
+          {localProfile?.avatar_url && !avatarError ? (
+            <img 
+              src={localProfile.avatar_url} 
+              alt="Avatar" 
+              onError={() => setAvatarError(true)} 
+              className="w-full h-full object-cover" 
+            />
           ) : (
             initials
           )}

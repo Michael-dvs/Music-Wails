@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { supabase } from '../lib/supabase';
-import { Settings as SettingsIcon, Save, Moon, Sun, Key, Loader2, Info } from 'lucide-react';
+import { Settings as SettingsIcon, Save, Moon, Sun, Key, Loader2, Info, Zap } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export default function Settings() {
@@ -129,16 +129,35 @@ export default function Settings() {
 
         {/* API Credentials Settings */}
         <section className="space-y-6">
-          <h2 className="text-xl font-semibold flex items-center space-x-2">
-            <Key className="w-5 h-5 text-brand-500" />
-            <span>Kredensial API YouTube</span>
-          </h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-semibold flex items-center space-x-2">
+              <Key className="w-5 h-5 text-brand-500" />
+              <span>Kredensial API YouTube (Opsional)</span>
+            </h2>
+          </div>
+
+          {/* Innertube Active Engine Badge */}
+          <div className="bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-transparent border border-emerald-500/25 rounded-2xl p-5 flex items-start space-x-4 shadow-sm">
+            <div className="w-10 h-10 rounded-xl bg-emerald-500 text-white flex items-center justify-center flex-shrink-0 shadow-md shadow-emerald-500/30">
+              <Zap className="w-5 h-5 fill-white" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-gray-900 dark:text-white flex items-center space-x-2">
+                <span>Engine YouTube Innertube Aktif</span>
+                <span className="text-[10px] bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-semibold px-2 py-0.5 rounded-full">
+                  Bebas API Key
+                </span>
+              </h3>
+              <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 leading-relaxed">
+                Aplikasi kini otomatis menggunakan <strong>YouTube Innertube Engine</strong> (seperti BitChord). Semua lagu diputar dalam durasi penuh dan kualitas tinggi secara langsung tanpa perlu registrasi atau membuat API Key di Google Developers.
+              </p>
+            </div>
+          </div>
           
-          <div className="bg-brand-500/5 border border-brand-500/20 rounded-2xl p-5 flex items-start space-x-3 mb-6">
+          <div className="bg-brand-500/5 border border-brand-500/20 rounded-2xl p-4 flex items-start space-x-3">
             <Info className="w-5 h-5 text-brand-500 flex-shrink-0 mt-0.5" />
-            <p className="text-sm text-brand-600 dark:text-brand-400 leading-relaxed">
-              Kunci API disimpan secara aman di dalam database Supabase Anda, sehingga akan selalu tersinkronisasi 
-              kapanpun Anda login. Jika API Key 1 terkena batasan kuota (Error 429), aplikasi akan otomatis menggunakan API Key 2.
+            <p className="text-xs text-brand-600 dark:text-brand-400 leading-relaxed">
+              <strong>Kredensial Kustom:</strong> Anda tidak wajib mengisi kolom di bawah ini. Kolom ini hanya disediakan jika Anda memiliki kuota YouTube Data API v3 pribadi yang ingin diprioritaskan sebelum fallback otomatis ke Innertube engine.
             </p>
           </div>
 
@@ -147,29 +166,29 @@ export default function Settings() {
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  YouTube API Key 1 (Primary)
+                  YouTube API Key 1 (Opsional / Override)
                 </label>
                 <input
                   type="password"
                   value={key1}
                   onChange={(e) => setKey1(e.target.value)}
-                  placeholder="AIzaSy..."
+                  placeholder="Kosongkan untuk engine otomatis, atau masukkan AIzaSy..."
                   className="w-full bg-white dark:bg-[#1c1c1e] border border-gray-300 dark:border-white/10 rounded-xl px-4 py-3 
-                           focus:outline-none focus:ring-2 focus:ring-brand-500 transition-shadow text-black dark:text-white"
+                           focus:outline-none focus:ring-2 focus:ring-brand-500 transition-shadow text-black dark:text-white text-sm"
                 />
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  YouTube API Key 2 (Fallback)
+                  YouTube API Key 2 (Opsional / Cadangan)
                 </label>
                 <input
                   type="password"
                   value={key2}
                   onChange={(e) => setKey2(e.target.value)}
-                  placeholder="Opsional, digunakan saat Key 1 limit"
+                  placeholder="Kosongkan untuk engine otomatis..."
                   className="w-full bg-white dark:bg-[#1c1c1e] border border-gray-300 dark:border-white/10 rounded-xl px-4 py-3 
-                           focus:outline-none focus:ring-2 focus:ring-brand-500 transition-shadow text-black dark:text-white"
+                           focus:outline-none focus:ring-2 focus:ring-brand-500 transition-shadow text-black dark:text-white text-sm"
                 />
               </div>
             </div>

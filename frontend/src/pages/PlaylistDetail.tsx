@@ -6,6 +6,7 @@ interface PlaylistDetailProps {
   songs: main.Song[];
   playlistName: string;
   playlistColor: string;
+  coverUrl?: string;
   onPlaySong: (song: main.Song, queue: main.Song[], source: 'playlist' | 'search') => void;
   onBack: () => void;
 }
@@ -18,7 +19,7 @@ function formatDuration(ms: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-export default function PlaylistDetail({ songs, playlistName, playlistColor, onPlaySong, onBack }: PlaylistDetailProps) {
+export default function PlaylistDetail({ songs, playlistName, playlistColor, coverUrl, onPlaySong, onBack }: PlaylistDetailProps) {
   const totalDuration = songs.reduce((acc, s) => acc + (s.duration || 0), 0);
   const totalMinutes = Math.floor(totalDuration / 60000);
 
@@ -30,7 +31,7 @@ export default function PlaylistDetail({ songs, playlistName, playlistColor, onP
       transition={{ duration: 0.35, ease: 'easeOut' }}
       className="w-full h-full flex flex-col overflow-y-auto pb-32"
     >
-      {/* Header with cover art mosaic */}
+      {/* Header with cover art mosaic or single cover */}
       <div 
         className="relative w-full px-8 pt-8 pb-10 flex items-end space-x-8"
         style={{ background: `linear-gradient(180deg, ${playlistColor}44 0%, transparent 100%)` }}
@@ -45,28 +46,43 @@ export default function PlaylistDetail({ songs, playlistName, playlistColor, onP
           <ArrowLeft className="w-5 h-5" />
         </motion.button>
 
-        {/* Cover Art Mosaic (2x2 grid from first 4 songs) */}
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.1 }}
-          className="w-52 h-52 rounded-2xl overflow-hidden shadow-2xl shadow-black/50 border border-black/10 dark:border-white/10 grid grid-cols-2 grid-rows-2 flex-shrink-0"
-        >
-          {songs.slice(0, 4).map((song, i) => (
+        {/* Cover Art */}
+        {coverUrl ? (
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.1 }}
+            className="w-52 h-52 rounded-2xl overflow-hidden shadow-2xl shadow-black/50 border border-black/10 dark:border-white/10 flex-shrink-0"
+          >
             <img 
-              key={song.id || i} 
-              src={song.coverArt} 
-              alt="" 
+              src={coverUrl} 
+              alt={playlistName} 
               className="w-full h-full object-cover"
             />
-          ))}
-          {/* Fill remaining slots if less than 4 songs */}
-          {Array.from({ length: Math.max(0, 4 - songs.length) }).map((_, i) => (
-            <div key={`empty-${i}`} className="w-full h-full bg-black/5 dark:bg-white/5 flex items-center justify-center">
-              <Music2 className="w-6 h-6 text-black/20 dark:text-white/20" />
-            </div>
-          ))}
-        </motion.div>
+          </motion.div>
+        ) : (
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.1 }}
+            className="w-52 h-52 rounded-2xl overflow-hidden shadow-2xl shadow-black/50 border border-black/10 dark:border-white/10 grid grid-cols-2 grid-rows-2 flex-shrink-0"
+          >
+            {songs.slice(0, 4).map((song, i) => (
+              <img 
+                key={song.id || i} 
+                src={song.coverArt} 
+                alt="" 
+                className="w-full h-full object-cover"
+              />
+            ))}
+            {/* Fill remaining slots if less than 4 songs */}
+            {Array.from({ length: Math.max(0, 4 - songs.length) }).map((_, i) => (
+              <div key={`empty-${i}`} className="w-full h-full bg-black/5 dark:bg-white/5 flex items-center justify-center">
+                <Music2 className="w-6 h-6 text-black/20 dark:text-white/20" />
+              </div>
+            ))}
+          </motion.div>
+        )}
 
         {/* Playlist Info */}
         <motion.div 

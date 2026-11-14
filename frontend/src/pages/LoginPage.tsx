@@ -64,8 +64,6 @@ export default function LoginPage() {
       setGoogleLoading(false);
     });
     return () => {
-      EventsOff('auth:google:error');
-      EventsOff('login-success');
       if (typeof unlistenError   === 'function') unlistenError();
       if (typeof unlistenSuccess === 'function') unlistenSuccess();
     };

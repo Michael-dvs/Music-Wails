@@ -1,15 +1,20 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
-const supabaseAnon = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+const rawUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+const rawAnon = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
 
-if (!supabaseUrl || supabaseUrl === 'YOUR_SUPABASE') {
+const isConfigured = Boolean(rawUrl && rawUrl !== 'YOUR_SUPABASE');
+
+if (!isConfigured) {
   console.error(
     '[Supabase] ⚠️  VITE_SUPABASE_URL belum diset!\n' +
     'Edit file frontend/.env dan isi VITE_SUPABASE_URL dengan URL project Supabase Anda.\n' +
     'Contoh: https://abcdefghijklmnop.supabase.co'
   );
 }
+
+const supabaseUrl = isConfigured ? rawUrl! : 'https://placeholder.supabase.co';
+const supabaseAnon = (rawAnon && rawAnon.trim() !== '') ? rawAnon : 'placeholder-key';
 
 export const supabase = createClient(supabaseUrl, supabaseAnon, {
   auth: {
@@ -49,4 +54,26 @@ export interface HomeSettingRow {
   category: string;
   display_order: number;
   is_active: boolean;
+}
+
+export interface DbPlaylist {
+  id: string;
+  user_id: string;
+  name: string;
+  cover_url: string | null;
+  created_at: string;
+  track_count?: number;
+}
+
+export interface DbPlaylistTrack {
+  id: string;
+  playlist_id: string;
+  track_id: string;
+  title: string;
+  artist: string;
+  album: string | null;
+  cover_url: string | null;
+  added_at: string;
+  duration: number | null;
+  order_index: number | null;
 }

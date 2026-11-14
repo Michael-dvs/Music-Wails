@@ -3,13 +3,17 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
-	"math/rand"
+	mathrand "math/rand"
 	"net/http"
 	"net/url"
 	"os"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -322,6 +326,19 @@ func (a *App) UpdateHomeContent(token string, row HomeSettingRow) error {
 
 const oauthCallbackPort = 54321
 
+// generatePKCE creates a high-entropy cryptographically random code_verifier
+// and calculates its SHA256 base64url code_challenge.
+func generatePKCE() (verifier, challenge string, err error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", "", err
+	}
+	verifier = base64.RawURLEncoding.EncodeToString(b)
+	h := sha256.Sum256([]byte(verifier))
+	challenge = base64.RawURLEncoding.EncodeToString(h[:])
+	return verifier, challenge, nil
+}
+
 // oauthResult carries tokens (or an error) from the local HTTP callback
 type oauthResult struct {
 	AccessToken  string
@@ -331,7 +348,7 @@ type oauthResult struct {
 
 // StartGoogleLogin opens the system browser for Google OAuth and
 // starts a temporary local server to capture the Supabase callback.
-// This is non-blocking — the result arrives via Wails event "auth:google:success".
+// This is non-blocking — the result arrives via Wails event "login-success".
 func (a *App) StartGoogleLogin() error {
 	if a.sbURL == "" || a.sbURL == "YOUR_SUPABASE" {
 		return fmt.Errorf("SUPABASE_URL not configured — edit .env dan restart")
@@ -339,16 +356,18 @@ func (a *App) StartGoogleLogin() error {
 
 	redirectTo := fmt.Sprintf("http://localhost:%d/callback", oauthCallbackPort)
 
+	// Clean authorization URL without PKCE parameters so Supabase uses direct token flow (hash fragment)
+	// prompt=select_account forces Google to show account selection picker
 	authURL := fmt.Sprintf(
-		"%s/auth/v1/authorize?provider=google&redirect_to=%s",
+		"%s/auth/v1/authorize?provider=google&redirect_to=%s&prompt=select_account",
 		a.sbURL,
 		url.QueryEscape(redirectTo),
 	)
 
 	// Start the local callback server
-	resultCh, stopServer := a.startOAuthCallbackServer()
+	resultCh, stopServer := a.startOAuthCallbackServer("")
 
-	// Open system browser (Chrome, Edge, Firefox — whatever the OS default is)
+	// Open system browser (Chrome, Safari, Firefox, Edge, etc.)
 	runtime.BrowserOpenURL(a.ctx, authURL)
 
 	// Wait for callback asynchronously — don't block the UI
@@ -378,11 +397,11 @@ func (a *App) StartGoogleLogin() error {
 
 // startOAuthCallbackServer starts a local HTTP server on :54321.
 // Returns a channel that delivers the result and a stop function.
-func (a *App) startOAuthCallbackServer() (<-chan oauthResult, func()) {
+func (a *App) startOAuthCallbackServer(codeVerifier string) (<-chan oauthResult, func()) {
 	resultCh := make(chan oauthResult, 1)
 
-	// ── Callback page: returns HTML that reads the URL fragment via JS ──
-	callbackHTML := fmt.Sprintf(`<!DOCTYPE html>
+	// Raw HTML page served to browser. Uses token replacement instead of Sprintf to prevent % corruption.
+	callbackHTMLRaw := `<!DOCTYPE html>
 <html lang="id">
 <head>
   <meta charset="UTF-8">
@@ -503,12 +522,15 @@ func (a *App) startOAuthCallbackServer() (<-chan oauthResult, func()) {
 
   <script>
   (function() {
+    var port = "PORT_PLACEHOLDER";
+    var currentOrigin = window.location.origin || ("http://127.0.0.1:" + port);
+
     var hashParams  = new URLSearchParams(window.location.hash.slice(1));
     var queryParams = new URLSearchParams(window.location.search);
 
     var accessToken  = hashParams.get('access_token')  || queryParams.get('access_token');
     var refreshToken = hashParams.get('refresh_token') || queryParams.get('refresh_token') || '';
-    var code         = queryParams.get('code');
+    var code         = queryParams.get('code')         || hashParams.get('code');
     var err          = hashParams.get('error_description') || hashParams.get('error') ||
                        queryParams.get('error_description') || queryParams.get('error');
 
@@ -523,7 +545,7 @@ func (a *App) startOAuthCallbackServer() (<-chan oauthResult, func()) {
       document.getElementById('icon-success').style.display = 'block';
       document.getElementById('title').textContent = 'Autentikasi Berhasil';
       document.getElementById('msg').textContent   = 'Anda sudah bisa kembali ke aplikasi. Tab ini akan tertutup otomatis.';
-      setTimeout(function() { window.close(); }, 3000);
+      setTimeout(function() { window.close(); }, 2000);
     }
 
     function showError(msg) {
@@ -534,22 +556,22 @@ func (a *App) startOAuthCallbackServer() (<-chan oauthResult, func()) {
     }
 
     if (accessToken) {
-      fetch('http://localhost:%d/token', {
+      fetch(currentOrigin + '/token', {
         method:  'POST',
         headers: {'Content-Type':'application/json'},
         body:    JSON.stringify({access_token: accessToken, refresh_token: refreshToken})
       }).then(showSuccess).catch(function(){ showSuccess(); });
 
     } else if (code) {
-      fetch('http://localhost:%d/code', {
+      fetch(currentOrigin + '/code', {
         method:  'POST',
         headers: {'Content-Type':'application/json'},
         body:    JSON.stringify({code: code})
-      }).then(showSuccess).catch(function(){ showSuccess(); });
+      }).then(showSuccess).catch(function(e){ showError('Gagal memproses kode: ' + e); });
 
     } else if (err) {
       showError(err);
-      fetch('http://localhost:%d/error', {
+      fetch(currentOrigin + '/error', {
         method:  'POST',
         headers: {'Content-Type':'application/json'},
         body:    JSON.stringify({error: err})
@@ -561,7 +583,9 @@ func (a *App) startOAuthCallbackServer() (<-chan oauthResult, func()) {
   })();
   </script>
 </body>
-</html>`, oauthCallbackPort, oauthCallbackPort, oauthCallbackPort)
+</html>`
+
+	callbackHTML := strings.ReplaceAll(callbackHTMLRaw, "PORT_PLACEHOLDER", fmt.Sprintf("%d", oauthCallbackPort))
 
 	mux := http.NewServeMux()
 
@@ -608,11 +632,11 @@ func (a *App) startOAuthCallbackServer() (<-chan oauthResult, func()) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.WriteHeader(http.StatusOK)
 
-		// Exchange code → tokens via Supabase REST
+		// Exchange code + code_verifier → tokens via Supabase REST
 		go func() {
 			body := map[string]interface{}{
-				"auth_code":    payload.Code,
-				"redirect_uri": fmt.Sprintf("http://localhost:%d/callback", oauthCallbackPort),
+				"auth_code":     payload.Code,
+				"code_verifier": codeVerifier,
 			}
 			resp, err := a.sbRequest("POST", "/auth/v1/token?grant_type=pkce", "", body)
 			if err != nil {
@@ -627,11 +651,16 @@ func (a *App) startOAuthCallbackServer() (<-chan oauthResult, func()) {
 				AccessToken  string `json:"access_token"`
 				RefreshToken string `json:"refresh_token"`
 				Error        string `json:"error_description"`
+				Msg          string `json:"msg"`
 			}
 			json.NewDecoder(resp.Body).Decode(&session)
-			if session.Error != "" {
+			errMsg := session.Error
+			if errMsg == "" {
+				errMsg = session.Msg
+			}
+			if errMsg != "" {
 				select {
-				case resultCh <- oauthResult{Error: session.Error}:
+				case resultCh <- oauthResult{Error: errMsg}:
 				default:
 				}
 				return
@@ -656,7 +685,7 @@ func (a *App) startOAuthCallbackServer() (<-chan oauthResult, func()) {
 	})
 
 	srv := &http.Server{
-		Addr:    fmt.Sprintf(":%d", oauthCallbackPort),
+		Addr:    fmt.Sprintf("0.0.0.0:%d", oauthCallbackPort),
 		Handler: mux,
 	}
 	go func() { _ = srv.ListenAndServe() }()
@@ -897,13 +926,74 @@ func (a *App) GetPlaylist(category string) ([]Song, error) {
 }
 
 // ─────────────────────────────────────────────
-//  YOUTUBE STREAMING
+//  YOUTUBE STREAMING (INNERTUBE & OFFICIAL API)
 // ─────────────────────────────────────────────
 
-// GetFullStreamURL — searches YouTube (Official API v3) then extracts stream via kkdai
-// Returns ("", error) on failure so frontend can fall back to iTunes preview
+// searchYouTubeInnertube searches YouTube using the internal Innertube API (BitChord style)
+// without requiring any Google Developer API key.
+func searchYouTubeInnertube(query string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+
+	payload := map[string]interface{}{
+		"context": map[string]interface{}{
+			"client": map[string]interface{}{
+				"clientName":    "WEB",
+				"clientVersion": "2.20240101.01.00",
+				"hl":            "en",
+				"gl":            "US",
+			},
+		},
+		"query": query,
+	}
+
+	bodyBytes, err := json.Marshal(payload)
+	if err != nil {
+		return "", err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", "https://www.youtube.com/youtubei/v1/search?prettyPrint=false", bytes.NewReader(bodyBytes))
+	if err != nil {
+		return "", err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+
+	client := &http.Client{Timeout: 8 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("innertube request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("innertube returned status %d", resp.StatusCode)
+	}
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read innertube response: %w", err)
+	}
+
+	// Fast and reliable regex search for videoId
+	re := regexp.MustCompile(`"videoId":"([a-zA-Z0-9_-]{11})"`)
+	matches := re.FindAllStringSubmatch(string(respBody), 10)
+	if len(matches) == 0 {
+		return "", fmt.Errorf("no video found via innertube for: %s", query)
+	}
+
+	return matches[0][1], nil
+}
+
+// GetFullStreamURL — searches YouTube (custom API keys if provided, with automatic Innertube engine fallback)
+// then extracts stream via kkdai.
+// Returns ("", error) on failure so frontend can fall back to iTunes preview.
 func (a *App) GetFullStreamURL(artist string, title string, key1 string, key2 string) (string, error) {
 	query := fmt.Sprintf("%s %s audio", artist, title)
+
+	var videoID string
+	var err error
 
 	tryKey := func(key string) (string, error) {
 		if key == "" {
@@ -927,25 +1017,39 @@ func (a *App) GetFullStreamURL(artist string, title string, key1 string, key2 st
 		return response.Items[0].Id.VideoId, nil
 	}
 
-	var videoID string
-	var err error
-
-	// Step 1: Search via Official YouTube Data API v3 with Failover
-	videoID, err = tryKey(key1)
-	if err != nil {
-		fmt.Printf("[YouTube] Key 1 failed: %v\n", err)
-		
-		// Fallback to Key 2
+	// Step 1: If user provided custom keys in Settings, attempt them first
+	if key1 != "" {
+		videoID, err = tryKey(key1)
+		if err != nil {
+			fmt.Printf("[YouTube] Key 1 failed (%v), trying Key 2...\n", err)
+			if key2 != "" {
+				videoID, err = tryKey(key2)
+				if err != nil {
+					fmt.Printf("[YouTube] Key 2 failed (%v)\n", err)
+				}
+			}
+		}
+	} else if key2 != "" {
 		videoID, err = tryKey(key2)
 		if err != nil {
-			fmt.Printf("[YouTube] Key 2 failed: %v\n", err)
-			return "", fmt.Errorf("QUOTA_EXCEEDED")
+			fmt.Printf("[YouTube] Key 2 failed (%v)\n", err)
+		}
+	}
+
+	// Step 2: If no custom keys provided or both failed/exceeded quota,
+	// resolve seamlessly using YouTube Innertube Engine (BitChord-style zero-API-key search)
+	if videoID == "" {
+		fmt.Printf("[YouTube] Using Innertube engine for '%s'...\n", query)
+		videoID, err = searchYouTubeInnertube(query)
+		if err != nil {
+			fmt.Printf("[YouTube] Innertube search failed: %v\n", err)
+			return "", fmt.Errorf("video search failed: %w", err)
 		}
 	}
 
 	fmt.Printf("[YouTube] Found video ID: %s for '%s'\n", videoID, query)
 
-	// Step 2: Extract audio stream via kkdai
+	// Step 3: Extract audio stream via kkdai
 	ytClient := youtube.Client{}
 	video, err := ytClient.GetVideo(videoID)
 	if err != nil {
@@ -1350,7 +1454,7 @@ func itunesRSSHardFallback(excludeIDs map[string]bool, limit int) []SmartTrack {
 	}
 
 	// Fisher-Yates shuffle so the hard fallback feels varied
-	rand.Shuffle(len(pool), func(i, j int) { pool[i], pool[j] = pool[j], pool[i] })
+	mathrand.Shuffle(len(pool), func(i, j int) { pool[i], pool[j] = pool[j], pool[i] })
 
 	if limit > len(pool) {
 		limit = len(pool)

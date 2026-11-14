@@ -11,6 +11,8 @@ import LoginPage from './pages/LoginPage';
 import Settings from './pages/Settings';
 import Profile from './pages/Profile';
 import ArtistDetail from './pages/ArtistDetail';
+import Playlists from './pages/Playlists';
+import Library from './pages/Library';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 
@@ -817,11 +819,8 @@ function MusicApp() {
                     {activeTab === 'search' && <Search key="search" onPlaySong={handlePlaySong} onNavigateToArtist={navigateToArtist} />}
                     {activeTab === 'profile' && <Profile key="profile" />}
                     {activeTab === 'settings' && <Settings key="settings" />}
-                    {(activeTab === 'library' || activeTab === 'playlists') && (
-                      <div key="placeholder" className="w-full h-full flex items-center justify-center text-gray-600 dark:text-gray-400">
-                        <h2 className="text-2xl font-semibold capitalize">{activeTab} — Coming Soon</h2>
-                      </div>
-                    )}
+                    {activeTab === 'playlists' && <Playlists key="playlists" onPlaySong={handlePlaySong} />}
+                    {activeTab === 'library' && <Library key="library" onPlaySong={handlePlaySong} onNavigateToArtist={navigateToArtist} />}
                   </>
                 )}
               </AnimatePresence>

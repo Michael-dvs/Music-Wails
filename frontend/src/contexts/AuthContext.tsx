@@ -73,24 +73,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // ── Fetch profile from 'profiles' table ──
   const fetchProfile = useCallback(async (userId: string) => {
     try {
+      console.log('[Auth] Fetching profile for user:', userId);
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
         .single();
-      if (!error && data) setProfile(data as UserProfile);
-    } catch (_) {}
+      if (error) {
+        console.warn('[Auth] Could not fetch profile from Supabase:', error.message);
+      } else if (data) {
+        console.log('[Auth] Profile loaded successfully:', data.username);
+        setProfile(data as UserProfile);
+      }
+    } catch (err) {
+      console.error('[Auth] Exception fetching profile:', err);
+    }
   }, []);
 
   // ── Fetch favorites ──
   const refreshFavorites = useCallback(async () => {
     try {
-      const { data } = await supabase
+      console.log('[Auth] Fetching favorites from Supabase...');
+      const { data, error } = await supabase
         .from('user_favorites')
         .select('*')
         .order('added_at', { ascending: false });
-      setFavorites((data as FavoriteTrack[]) ?? []);
-    } catch (_) {}
+      if (error) {
+        console.warn('[Auth] Could not fetch favorites:', error.message);
+      } else {
+        console.log('[Auth] Favorites loaded:', data?.length ?? 0);
+        setFavorites((data as FavoriteTrack[]) ?? []);
+      }
+    } catch (err) {
+      console.error('[Auth] Exception fetching favorites:', err);
+    }
   }, []);
 
   // ── Initialize session on mount ──
@@ -119,18 +135,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // ── Wails events from Go OAuth callback server ──────────────
     // Fires when StartGoogleLogin() captures the tokens from localhost:54321
-    const unlistenSuccess = EventsOn('login-success', async (data: { access_token: string; refresh_token: string }) => {
+    const unlistenSuccess = EventsOn('login-success', async (raw: any) => {
+      console.log('[Auth] login-success event received:', raw);
       try {
+        let data = raw;
+        if (typeof raw === 'string') {
+          try {
+            data = JSON.parse(raw);
+          } catch (_) {}
+        }
+
+        const accessToken = data?.access_token;
+        const refreshToken = data?.refresh_token;
+
+        if (!accessToken) {
+          console.error('[Auth] access_token missing in login-success payload:', raw);
+          return;
+        }
+
         const { data: sessionData, error } = await supabase.auth.setSession({
-          access_token:  data.access_token,
-          refresh_token: data.refresh_token,
+          access_token:  accessToken,
+          refresh_token: refreshToken || '',
         });
+
         if (error) {
           console.error('[Auth] setSession failed:', error.message);
         } else if (sessionData?.session) {
+          console.log('[Auth] Session established successfully for user:', sessionData.session.user.id);
           // Instant state update for UX
           setSession(sessionData.session);
           setUser(sessionData.session.user);
+          setIsLoading(false);
           fetchProfile(sessionData.session.user.id);
           refreshFavorites();
         }
@@ -146,8 +181,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return () => {
       listener.subscription.unsubscribe();
-      EventsOff('login-success');
-      EventsOff('auth:google:error');
       if (typeof unlistenSuccess === 'function') unlistenSuccess();
       if (typeof unlistenError   === 'function') unlistenError();
     };
@@ -155,10 +188,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // ── Sign In (email + password) ──
   const signIn = useCallback(async (email: string, password: string): Promise<string | null> => {
-    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
     if (error) return translateAuthError(error.message);
+    if (data?.session) {
+      setSession(data.session);
+      setUser(data.session.user);
+      await fetchProfile(data.session.user.id);
+      await refreshFavorites();
+    }
     return null;
-  }, []);
+  }, [fetchProfile, refreshFavorites]);
 
   // ── Sign Up ──
   // Returns { error, needsConfirmation }

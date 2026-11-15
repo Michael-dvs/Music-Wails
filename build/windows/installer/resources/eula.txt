@@ -1,0 +1,22 @@
+PERJANJIAN LISENSI PENGGUNA AKHIR (EULA) & PEMBERITAHUAN HAK CIPTA
+Aplikasi: Music-Wails
+Pemilik: Michael (maikerurahadian@gmail.com)
+Status Rilis: Evaluasi Internal / Non-Komersial (Kandidat Rilis Publik Diblokir)
+
+PENTING — BACA DENGAN SEKSAMA SEBELUM MENGGUNAKAN PERANGKAT LUNAK INI:
+
+1. KEPEMILIKAN DAN HAK CIPTA
+Perangkat lunak Music-Wails dan seluruh kode sumber proprietary yang disertakan adalah hak milik dari pembuat/pemilik aplikasi. Hak cipta dilindungi oleh undang-undang yang berlaku.
+
+2. STATUS DISTRIBUSI DAN BLOKIR RILIS KOMERSIAL
+Berdasarkan tinjauan kepatuhan legal dan lisensi:
+Aplikasi ini saat ini berstatus evaluasi pengembangan internal. Distribusi komersial, penyediaan layanan berbayar, atau rilis publik secara luas DIBLOKIR hingga seluruh izin hak konten, kontrak penyedia layanan pihak ketiga (termasuk streaming musik, metadata, dan lirik), serta persetujuan hukum formal telah diselesaikan dan disetujui secara tertulis oleh pemilik hak dan penasihat hukum yang berwenang.
+
+3. KOMPONEN DAN PERANGKAT LUNAK PIHAK KETIGA
+Perangkat lunak ini mengikutsertakan komponen, library, dan font sumber terbuka (open-source) yang tunduk pada ketentuan lisensi masing-masing (antara lain MIT, BSD-2-Clause, BSD-3-Clause, Apache-2.0, ISC, dan SIL Open Font License 1.1).
+Ketentuan dalam EULA ini tidak membatasi, mengubah, atau mengurangi hak-hak pengguna yang telah dijamin oleh masing-masing lisensi perangkat lunak sumber terbuka tersebut.
+Daftar lengkap dan teks utuh seluruh lisensi pihak ketiga dapat dilihat pada berkas THIRD_PARTY_LICENSES.txt yang disertakan dalam paket aplikasi.
+
+4. BATASAN TANGGUNG JAWAB DAN PENAFIAN JAMINAN (DISCLAIMER)
+PERANGKAT LUNAK INI DISEDIAKAN "SEBAGAIMANA ADANYA" (AS IS), TANPA JAMINAN APAPUN BAIK TERSURAT MAUPUN TERSIRAT, TERMASUK NAMUN TIDAK TERBATAS PADA JAMINAN KELAYAKAN USAHA, KESESUAIAN UNTUK TUJUAN TERTENTU, DAN KETIADAAN PELANGGARAN HAK PIHAK LAIN.
+DALAM KEADAAN APAPUN PEMILIK HAK CIPTA TIDAK BERTANGGUNG JAWAB ATAS KLAIM, KERUSAKAN, ATAU KEWAJIBAN LAINNYA YANG TIMBUL DARI PENGGUNAAN ATAU TRANSAKSI LAIN DALAM PERANGKAT LUNAK INI.

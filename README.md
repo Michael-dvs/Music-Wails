@@ -10,6 +10,9 @@ Music-Wails is a desktop application developed using the Wails framework, integr
 - **Modern Frontend**: Utilizes React and TypeScript for a responsive, maintainable, and scalable user interface.
 - **Dynamic User Interface**: Incorporates advanced frontend packages (such as image color extraction) for an immersive media experience.
 - **High Performance**: Leverages the Go programming language for fast and efficient backend processing.
+- **Audio transitions**: Settings offers automatic next-track preloading, crossfade, smooth fade, or direct transitions, with a configurable duration. Preferences are saved locally.
+
+Preloading starts after 75% of a track when a next queue item is available. Playback readiness depends on network and stream availability; preloading cannot guarantee a gapless transition.
 
 ## Prerequisites
 

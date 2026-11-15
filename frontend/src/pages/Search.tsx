@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Search as SearchIcon, Play, Loader2, X, Clock, Music2, User, Disc3 } from 'lucide-react';
+import { Search as SearchIcon, Play, Loader2, X, Clock, Music2, User, Disc3, AlertCircle, RotateCcw } from 'lucide-react';
 import { main } from '../../wailsjs/go/models';
 import { SearchSongs } from '../../wailsjs/go/main/App';
 import { motion, AnimatePresence } from 'framer-motion';
 import { fetchAPI } from '../lib/fetchAPI';
 import { fetchArtistImage } from '../lib/artistImage';
 import AlbumDetail, { getAvatarColor, getInitials, getHighResArtwork } from './AlbumDetail';
+import SongActionMenu from '../components/SongActionMenu';
 
 const ANIMATED_PLACEHOLDERS = [
   'Cari lagu Tulus...',
@@ -51,22 +52,32 @@ interface ItunesArtist {
   avatarUrl?: string;
 }
 
+interface SearchProps {
+  onPlaySong: (song: main.Song, queue: main.Song[], source: 'playlist' | 'search') => void;
+  onNavigateToArtist?: (artistId: number, artistName: string, genre?: string) => void;
+  onPlayNext?: (song: main.Song) => void;
+  onAddToQueue?: (song: main.Song) => void;
+  onOpenAddToPlaylist?: (song: main.Song) => void;
+}
+
 export default function Search({
   onPlaySong,
   onNavigateToArtist,
-}: {
-  onPlaySong: (song: main.Song, queue: main.Song[], source: 'playlist' | 'search') => void;
-  onNavigateToArtist?: (artistId: number, artistName: string, genre?: string) => void;
-}) {
+  onPlayNext,
+  onAddToQueue,
+  onOpenAddToPlaylist,
+}: SearchProps) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<main.Song[]>([]);
   const [artists, setArtists] = useState<ItunesArtist[]>([]);
   const [albums, setAlbums] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingAlbums, setLoadingAlbums] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [isFocused, setIsFocused] = useState(false);
   const [history, setHistory] = useState<string[]>(getSearchHistory());
   const inputRef = useRef<HTMLInputElement>(null);
+  const searchGenRef = useRef(0);
 
   // Local state to navigate to album detail within search tab
   const [selectedAlbum, setSelectedAlbum] = useState<any | null>(null);
@@ -92,58 +103,84 @@ export default function Search({
     return () => clearInterval(interval);
   }, []);
 
-  // Debounced unified search — tracks (YouTube) + artists (iTunes) + albums (iTunes) concurrently
-  useEffect(() => {
+  const executeSearch = useCallback((searchTerm: string) => {
+    const trimmed = searchTerm.trim();
+    if (trimmed.length <= 2) {
+      searchGenRef.current++;
+      setResults([]);
+      setArtists([]);
+      setAlbums([]);
+      setLoading(false);
+      setLoadingAlbums(false);
+      setSearchError(null);
+      return;
+    }
+
+    const currentGen = ++searchGenRef.current;
+    setLoading(true);
+    setLoadingAlbums(true);
+    setSearchError(null);
+
     const timer = setTimeout(async () => {
-      if (query.trim().length > 2) {
-        setLoading(true);
-        setLoadingAlbums(true);
-        try {
-          const [songs, rawArtists, albumRes] = await Promise.all([
-            SearchSongs(query).catch(() => []),
-            fetchAPI<any>(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=musicArtist&limit=6&country=id`)
-              .then(d => (d.results ?? []) as ItunesArtist[])
-              .catch(() => [] as ItunesArtist[]),
-            fetchAPI<any>(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=album&limit=10&country=id`)
-              .then(d => d.results ?? [])
-              .catch(() => []),
-          ]);
+      try {
+        const [songs, rawArtists, albumRes] = await Promise.all([
+          SearchSongs(trimmed).catch((err) => {
+            console.error('Song search failed:', err);
+            return [];
+          }),
+          fetchAPI<any>(`https://itunes.apple.com/search?term=${encodeURIComponent(trimmed)}&entity=musicArtist&limit=6&country=id`)
+            .then(d => (d.results ?? []) as ItunesArtist[])
+            .catch(() => [] as ItunesArtist[]),
+          fetchAPI<any>(`https://itunes.apple.com/search?term=${encodeURIComponent(trimmed)}&entity=album&limit=10&country=id`)
+            .then(d => d.results ?? [])
+            .catch(() => []),
+        ]);
 
-          // Fetch foto profil artis secara paralel
-          const enrichedArtists = await Promise.all(
-            rawArtists.map(async (art) => {
-              try {
-                const avatar = await fetchArtistImage(art.artistName, art.artistId);
-                return { ...art, avatarUrl: avatar || undefined };
-              } catch {
-                return art;
-              }
-            })
-          );
+        if (searchGenRef.current !== currentGen) return;
 
-          setResults(songs || []);
-          setArtists(enrichedArtists);
-          setAlbums(albumRes);
-          // Save to history on successful search
-          if ((songs && songs.length > 0) || rawArtists.length > 0 || albumRes.length > 0) {
-            saveSearchHistory(query.trim());
-            setHistory(getSearchHistory());
-          }
-        } catch (e) {
-          console.error(e);
-        } finally {
+        // Fetch foto profil artis secara paralel
+        const enrichedArtists = await Promise.all(
+          rawArtists.map(async (art) => {
+            try {
+              const avatar = await fetchArtistImage(art.artistName, art.artistId);
+              return { ...art, avatarUrl: avatar || undefined };
+            } catch {
+              return art;
+            }
+          })
+        );
+
+        if (searchGenRef.current !== currentGen) return;
+
+        setResults(songs || []);
+        setArtists(enrichedArtists);
+        setAlbums(albumRes);
+
+        if ((songs && songs.length > 0) || rawArtists.length > 0 || albumRes.length > 0) {
+          saveSearchHistory(trimmed);
+          setHistory(getSearchHistory());
+        }
+      } catch (e: any) {
+        if (searchGenRef.current === currentGen) {
+          console.error('[Search] Error:', e);
+          setSearchError(e?.message || 'Gagal mengambil data pencarian.');
+        }
+      } finally {
+        if (searchGenRef.current === currentGen) {
           setLoading(false);
           setLoadingAlbums(false);
         }
-      } else if (query.trim().length === 0) {
-        setResults([]);
-        setArtists([]);
-        setAlbums([]);
       }
-    }, 500);
+    }, 400);
 
     return () => clearTimeout(timer);
-  }, [query]);
+  }, []);
+
+  // Debounced search trigger
+  useEffect(() => {
+    const cleanup = executeSearch(query);
+    return cleanup;
+  }, [query, executeSearch]);
 
   const handleHistoryClick = useCallback((term: string) => {
     setQuery(term);
@@ -163,6 +200,9 @@ export default function Search({
           onBack={() => setSelectedAlbum(null)}
           onPlaySong={onPlaySong}
           onNavigateToArtist={onNavigateToArtist}
+          onPlayNext={onPlayNext}
+          onAddToQueue={onAddToQueue}
+          onOpenAddToPlaylist={onOpenAddToPlaylist}
         />
       </AnimatePresence>
     );
@@ -177,8 +217,11 @@ export default function Search({
       exit={{ opacity: 0, y: -20 }}
       className="w-full h-full flex flex-col p-8 space-y-6 overflow-y-auto pb-32 no-scrollbar"
     >
-      {/* Search Bar with Animated Placeholder */}
+      {/* Search Bar with Animated Placeholder & Accessibility Label */}
       <div className="relative max-w-2xl w-full">
+        <label htmlFor="search-music-input" className="sr-only">
+          Cari lagu, artis, atau album
+        </label>
         <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-10">
           <SearchIcon className="text-gray-600 dark:text-gray-400 w-6 h-6" />
         </div>
@@ -194,7 +237,7 @@ export default function Search({
                   animate={{ opacity: 0.5, y: 0 }}
                   exit={{ opacity: 0, y: -8 }}
                   transition={{ duration: 0.3 }}
-                  className="text-gray-600 dark:text-gray-400 text-base"
+                  className="text-gray-600 dark:text-gray-400 text-base select-none"
                 >
                   {ANIMATED_PLACEHOLDERS[placeholderIdx]}
                 </motion.span>
@@ -205,7 +248,9 @@ export default function Search({
 
         <input 
           ref={inputRef}
+          id="search-music-input"
           type="text" 
+          aria-label="Cari lagu, artis, atau album"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onFocus={() => setIsFocused(true)}
@@ -217,14 +262,17 @@ export default function Search({
         <div className="absolute inset-y-0 right-0 pr-4 flex items-center space-x-2">
           {query.length > 0 && !loading && (
             <button 
-              onClick={() => { setQuery(''); setResults([]); }}
-              className="p-1 rounded-full hover:bg-black/10 dark:hover:bg-white/10 text-gray-600 dark:text-gray-400 hover:text-brand-500 dark:hover:text-brand-400 transition-colors"
+              type="button"
+              onClick={() => { setQuery(''); setResults([]); setArtists([]); setAlbums([]); setSearchError(null); }}
+              aria-label="Hapus teks pencarian"
+              title="Hapus pencarian"
+              className="p-1 rounded-full hover:bg-black/10 dark:hover:bg-white/10 text-gray-600 dark:text-gray-400 hover:text-brand-500 dark:hover:text-brand-400 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
             >
               <X className="w-4 h-4" />
             </button>
           )}
           {loading && (
-            <Loader2 className="text-brand-400 w-5 h-5 animate-spin" />
+            <Loader2 className="text-brand-400 w-5 h-5 animate-spin" aria-label="Memuat hasil pencarian..." />
           )}
         </div>
       </div>
@@ -238,25 +286,36 @@ export default function Search({
             exit={{ opacity: 0, y: -10 }}
             className="flex items-center flex-wrap gap-2 max-w-2xl"
           >
-            <Clock className="w-4 h-4 text-gray-500 mr-1" />
+            <Clock className="w-4 h-4 text-gray-500 mr-1" aria-hidden="true" />
             {history.map((term) => (
               <motion.div
                 key={term}
                 layout
+                role="button"
+                tabIndex={0}
+                aria-label={`Gunakan riwayat pencarian: ${term}`}
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.8 }}
                 transition={{ duration: 0.2 }}
-                className="group flex items-center space-x-1.5 bg-black/8 dark:bg-white/8 hover:bg-black/15 dark:hover:bg-white/15 backdrop-blur-md border border-black/10 dark:border-white/10 hover:border-black/20 dark:border-white/20 rounded-full px-3 py-1.5 cursor-pointer transition-all duration-200"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    handleHistoryClick(term);
+                  }
+                }}
+                className="group flex items-center space-x-1.5 bg-black/8 dark:bg-white/8 hover:bg-black/15 dark:hover:bg-white/15 backdrop-blur-md border border-black/10 dark:border-white/10 hover:border-black/20 dark:border-white/20 rounded-full px-3 py-1.5 cursor-pointer transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                 onClick={() => handleHistoryClick(term)}
               >
-                <span className="text-sm text-gray-700 dark:text-gray-300 group-hover:text-brand-500 dark:hover:text-brand-400 transition-colors">{term}</span>
+                <span className="text-sm text-gray-700 dark:text-gray-300 group-hover:text-brand-500 dark:group-hover:text-brand-400 transition-colors">{term}</span>
                 <button
+                  type="button"
+                  aria-label={`Hapus ${term} dari riwayat pencarian`}
                   onClick={(e) => {
                     e.stopPropagation();
                     handleHistoryRemove(term);
                   }}
-                  className="p-0.5 rounded-full opacity-0 group-hover:opacity-100 hover:bg-black/10 dark:hover:bg-white/10 text-gray-600 dark:text-gray-400 hover:text-brand-500 dark:hover:text-brand-400 transition-all"
+                  className="p-0.5 rounded-full opacity-60 group-hover:opacity-100 hover:bg-black/10 dark:hover:bg-white/10 text-gray-600 dark:text-gray-400 hover:text-brand-500 dark:hover:text-brand-400 transition-all focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-500"
                 >
                   <X className="w-3 h-3" />
                 </button>
@@ -265,6 +324,24 @@ export default function Search({
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Error Alert */}
+      {searchError && (
+        <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 flex items-center justify-between max-w-2xl">
+          <div className="flex items-center space-x-2 text-sm">
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            <span>{searchError}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => executeSearch(query)}
+            className="flex items-center space-x-1 px-3 py-1 rounded bg-red-500 text-white text-xs font-semibold hover:bg-red-600 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+          >
+            <RotateCcw className="w-3 h-3" />
+            <span>Coba Lagi</span>
+          </button>
+        </div>
+      )}
 
       {/* Results */}
       <div className="flex-1 flex flex-col space-y-8">
@@ -287,25 +364,23 @@ export default function Search({
                   return (
                     <motion.button
                       key={artist.artistId}
+                      type="button"
+                      aria-label={`Buka detail artis ${artist.artistName}`}
                       initial={{ opacity: 0, scale: 0.9 }}
                       animate={{ opacity: 1, scale: 1 }}
                       transition={{ delay: idx * 0.05 }}
                       onClick={() => handleArtistClick(artist)}
-                      // Wrapper is plain flex-col — NO rounded-full here (that caused the square-ring bug)
-                      className="flex flex-col items-center space-y-2.5 flex-shrink-0 group cursor-pointer focus:outline-none"
+                      className="flex flex-col items-center space-y-2.5 flex-shrink-0 group cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 rounded-2xl p-1"
                     >
-                      {/* Ring lives on the w-20 circle itself, not the button wrapper */}
                       <div
                         className={`w-20 h-20 rounded-full bg-gradient-to-br ${gradient}
                           flex items-center justify-center shadow-md select-none overflow-hidden relative
-                          group-hover:scale-110 group-hover:shadow-xl transition-all duration-300
-                          group-focus-visible:ring-2 group-focus-visible:ring-brand-500
-                          group-focus-visible:ring-offset-2 group-focus-visible:ring-offset-[var(--app-bg)]`}
+                          group-hover:scale-110 group-hover:shadow-xl transition-all duration-300`}
                       >
                         {artist.avatarUrl ? (
                           <img
                             src={artist.avatarUrl}
-                            alt={artist.artistName}
+                            alt=""
                             className="w-full h-full object-cover"
                             loading="lazy"
                             onError={(e) => {
@@ -351,18 +426,20 @@ export default function Search({
                   const coverArt = getHighResArtwork(album.artworkUrl100);
                   const year = album.releaseDate ? album.releaseDate.slice(0, 4) : '';
                   return (
-                    <motion.div
+                    <motion.button
                       key={album.collectionId}
+                      type="button"
+                      aria-label={`Buka album ${album.collectionName} oleh ${album.artistName}`}
                       initial={{ opacity: 0, scale: 0.92 }}
                       animate={{ opacity: 1, scale: 1 }}
                       transition={{ delay: idx * 0.03, duration: 0.3 }}
                       onClick={() => setSelectedAlbum(album)}
-                      className="w-40 flex-shrink-0 flex flex-col cursor-pointer group focus:outline-none"
+                      className="w-40 flex-shrink-0 flex flex-col text-left cursor-pointer group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 rounded-xl p-1"
                     >
                       <div className="relative w-40 h-40 rounded-xl overflow-hidden shadow-md border border-black/5 dark:border-white/5 group-hover:scale-[1.02] transition-all duration-300">
                         <img
                           src={coverArt}
-                          alt={album.collectionName}
+                          alt=""
                           className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                         />
                         <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
@@ -382,7 +459,7 @@ export default function Search({
                           {year}
                         </p>
                       </div>
-                    </motion.div>
+                    </motion.button>
                   );
                 })}
               </div>
@@ -401,15 +478,24 @@ export default function Search({
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
               {results.map((song, idx) => (
                 <motion.div 
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Putar ${song.title} oleh ${song.artist}`}
                   initial={{ opacity: 0, y: 15 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: idx * 0.04, duration: 0.3 }}
+                  transition={{ delay: Math.min(idx, 8) * 0.03, duration: 0.25 }}
                   key={song.id}
                   onClick={() => onPlaySong(song, [song], 'search')}
-                  className="group flex items-center space-x-4 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 border border-transparent hover:border-black/10 dark:border-white/10 p-3 rounded-xl cursor-pointer transition-all duration-300"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      onPlaySong(song, [song], 'search');
+                    }
+                  }}
+                  className="group flex items-center space-x-4 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 border border-transparent hover:border-black/10 dark:border-white/10 p-3 rounded-xl cursor-pointer transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                 >
                   <div className="relative w-16 h-16 flex-shrink-0">
-                    <img src={song.coverArt} alt={song.title} className="w-full h-full object-cover rounded-lg shadow-md" />
+                    <img src={song.coverArt} alt="" className="w-full h-full object-cover rounded-lg shadow-md" />
                     <div className="absolute inset-0 bg-white/40 dark:bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-lg">
                       <Play className="text-black dark:text-white w-6 h-6 fill-black dark:fill-white" />
                     </div>
@@ -424,19 +510,27 @@ export default function Search({
                       )}
                     </div>
                   </div>
+                  <div className="flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                    <SongActionMenu
+                      song={song}
+                      onPlayNext={onPlayNext}
+                      onAddToQueue={onAddToQueue}
+                      onOpenAddToPlaylist={onOpenAddToPlaylist}
+                    />
+                  </div>
                 </motion.div>
               ))}
             </div>
           </div>
         ) : (
-          query.length > 2 && !loading && artists.length === 0 && (
+          query.trim().length > 2 && !loading && !loadingAlbums && !searchError && artists.length === 0 && albums.length === 0 && (
             <motion.div 
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               className="flex flex-col items-center justify-center h-64 text-gray-600 dark:text-gray-400"
             >
               <SearchIcon className="w-12 h-12 mb-4 opacity-50" />
-              <p>No results found for "{query}"</p>
+              <p>Tidak ada hasil ditemukan untuk "{query}"</p>
             </motion.div>
           )
         )}

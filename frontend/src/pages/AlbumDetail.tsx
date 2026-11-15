@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Play, Loader2, Clock, Music2 } from 'lucide-react';
+import { ArrowLeft, Play, Loader2, Clock, Music2, RotateCcw } from 'lucide-react';
 import { main } from '../../wailsjs/go/models';
 import { fetchAPI } from '../lib/fetchAPI';
+import SongActionMenu from '../components/SongActionMenu';
 
 // ── iTunes types ──────────────────────────────────────────────────
 export interface ItunesTrack {
@@ -115,16 +116,26 @@ interface AlbumDetailProps {
   onBack: () => void;
   onPlaySong: (song: main.Song, queue: main.Song[], source: 'playlist' | 'search') => void;
   onNavigateToArtist?: (artistId: number, artistName: string, genre?: string) => void;
+  onPlayNext?: (song: main.Song) => void;
+  onAddToQueue?: (song: main.Song) => void;
+  onOpenAddToPlaylist?: (song: main.Song) => void;
 }
 
 // ── Component ─────────────────────────────────────────────────────
-export default function AlbumDetail({ album, onBack, onPlaySong, onNavigateToArtist }: AlbumDetailProps) {
+export default function AlbumDetail({
+  album,
+  onBack,
+  onPlaySong,
+  onNavigateToArtist,
+  onPlayNext,
+  onAddToQueue,
+  onOpenAddToPlaylist,
+}: AlbumDetailProps) {
   const [tracks, setTracks] = useState<ItunesTrack[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    // Guard: collectionId must be a valid positive number
+  const fetchTracks = useCallback(async () => {
     const collectionId = album?.collectionId;
     if (!collectionId || collectionId <= 0) {
       console.error('[AlbumDetail] Invalid collectionId:', collectionId);
@@ -133,72 +144,47 @@ export default function AlbumDetail({ album, onBack, onPlaySong, onNavigateToArt
       return;
     }
 
-    let cancelled = false;
+    setLoading(true);
+    setError(null);
 
-    const fetchTracks = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        /**
-         * CRITICAL PARAMS:
-         * - country=id  → unlocks Indonesian regional catalog (Bernadya, Juicy Luicy, etc.)
-         * - limit=200   → prevents pagination cutoff hiding studio tracks
-         * - entity=song → returns song items alongside the album record
-         */
-        const url = `https://itunes.apple.com/lookup?id=${collectionId}&entity=song&limit=200&country=id`;
-        console.log('[AlbumDetail] Fetching tracklist. collectionId:', collectionId, '| url:', url);
-        // fetchAPI routes through Go backend in production to bypass CORS
-        const data = await fetchAPI<any>(url);
-        console.log('[AlbumDetail] resultCount:', data.resultCount, '| raw results:', data.results?.length);
+    try {
+      /**
+       * CRITICAL PARAMS:
+       * - country=id  → unlocks Indonesian regional catalog (Bernadya, Juicy Luicy, etc.)
+       * - limit=200   → prevents pagination cutoff hiding studio tracks
+       * - entity=song → returns song items alongside the album record
+       */
+      const url = `https://itunes.apple.com/lookup?id=${collectionId}&entity=song&limit=200&country=id`;
+      console.log('[AlbumDetail] Fetching tracklist. collectionId:', collectionId, '| url:', url);
+      const data = await fetchAPI<any>(url);
 
-        if (!data.results || !Array.isArray(data.results)) {
-          throw new Error('iTunes API returned no results array.');
-        }
-
-        /**
-         * iTunes lookup response layout:
-         *   results[0]  → the album itself  (wrapperType === 'collection')
-         *   results[1…] → individual tracks (wrapperType === 'track')
-         *
-         * We filter strictly for wrapperType === 'track'.
-         * We intentionally do NOT filter on `kind === 'song'` because
-         * some iTunes markets return tracks without a kind field.
-         */
-        const songTracks = data.results.filter(
-          (r: any) => r.wrapperType === 'track'
-        ) as ItunesTrack[];
-
-        // Log sample to verify data shape from Indonesian store
-        if (songTracks.length > 0) {
-          console.log('[AlbumDetail] Sample track[0]:', {
-            trackId: songTracks[0].trackId,
-            trackName: songTracks[0].trackName,
-            collectionId: songTracks[0].collectionId,
-          });
-        } else {
-          console.warn('[AlbumDetail] No tracks after wrapperType filter. results[0]:', data.results?.[0]);
-        }
-        console.log('[AlbumDetail] Tracks after filter:', songTracks.length);
-
-        // Sort by disc number, then track number
-        songTracks.sort((a, b) => {
-          const discDiff = (a.discNumber ?? 1) - (b.discNumber ?? 1);
-          if (discDiff !== 0) return discDiff;
-          return (a.trackNumber ?? 0) - (b.trackNumber ?? 0);
-        });
-
-        if (!cancelled) setTracks(songTracks);
-      } catch (e: any) {
-        console.error('[AlbumDetail] Error fetching tracks:', e);
-        if (!cancelled) setError(e?.message ?? 'Unknown error');
-      } finally {
-        if (!cancelled) setLoading(false);
+      if (!data.results || !Array.isArray(data.results)) {
+        throw new Error('iTunes API returned no results array.');
       }
-    };
 
-    fetchTracks();
-    return () => { cancelled = true; };
+      const songTracks = data.results.filter(
+        (r: any) => r.wrapperType === 'track'
+      ) as ItunesTrack[];
+
+      // Sort by disc number, then track number (preserving multi-disc layout)
+      songTracks.sort((a, b) => {
+        const discDiff = (a.discNumber ?? 1) - (b.discNumber ?? 1);
+        if (discDiff !== 0) return discDiff;
+        return (a.trackNumber ?? 0) - (b.trackNumber ?? 0);
+      });
+
+      setTracks(songTracks);
+    } catch (e: any) {
+      console.error('[AlbumDetail] Error fetching tracks:', e);
+      setError(e?.message ?? 'Gagal memuat lagu album. Periksa koneksi internet Anda.');
+    } finally {
+      setLoading(false);
+    }
   }, [album?.collectionId]);
+
+  useEffect(() => {
+    fetchTracks();
+  }, [fetchTracks]);
 
   const handlePlayTrack = useCallback((track: ItunesTrack) => {
     const song = itunesTrackToSong(track);
@@ -215,6 +201,7 @@ export default function AlbumDetail({ album, onBack, onPlaySong, onNavigateToArt
   );
 
   const artistId = tracks[0]?.artistId ?? album.artistId ?? 0;
+  const hasMultipleDiscs = tracks.some(t => (t.discNumber ?? 1) > 1);
 
   return (
     <motion.div
@@ -222,8 +209,6 @@ export default function AlbumDetail({ album, onBack, onPlaySong, onNavigateToArt
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -40 }}
       transition={{ duration: 0.3, ease: 'easeOut' }}
-      // FIX: outermost wrapper is scrollable. pb-36 clears the sticky PlayerBar.
-      // flex-col with no fixed height — height is driven by h-full from parent.
       className="w-full h-full flex flex-col overflow-y-auto pb-36 no-scrollbar bg-[var(--app-bg)]"
     >
       {/* ── Header — flex-shrink-0 prevents it from collapsing ───── */}
@@ -231,15 +216,17 @@ export default function AlbumDetail({ album, onBack, onPlaySong, onNavigateToArt
         className="relative w-full px-8 pt-8 pb-10 flex items-end space-x-8 flex-shrink-0"
         style={{ background: 'linear-gradient(180deg, rgba(250,36,60,0.12) 0%, transparent 100%)' }}
       >
-        {/* Back button — positioned absolute so it doesn't affect flex layout */}
+        {/* Back button */}
         <motion.button
           initial={{ opacity: 0, x: -10 }}
           animate={{ opacity: 1, x: 0 }}
           onClick={onBack}
-          className="absolute top-6 left-6 z-10 flex items-center space-x-1.5 text-sm text-gray-500 dark:text-gray-400 hover:text-brand-500 dark:hover:text-brand-400 transition-colors group"
+          aria-label="Kembali ke tampilan sebelumnya"
+          title="Kembali"
+          className="absolute top-6 left-6 z-10 flex items-center space-x-1.5 text-sm text-gray-500 dark:text-gray-400 hover:text-brand-500 dark:hover:text-brand-400 transition-colors group p-1.5 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
         >
           <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
-          <span>Back</span>
+          <span>Kembali</span>
         </motion.button>
 
         {/* Album cover art */}
@@ -251,7 +238,7 @@ export default function AlbumDetail({ album, onBack, onPlaySong, onNavigateToArt
         >
           <img
             src={getHighResArtwork(album.artworkUrl100)}
-            alt={album.collectionName}
+            alt={`Sampul album ${album.collectionName}`}
             className="w-full h-full object-cover"
           />
         </motion.div>
@@ -274,7 +261,8 @@ export default function AlbumDetail({ album, onBack, onPlaySong, onNavigateToArt
             {onNavigateToArtist ? (
               <button
                 onClick={() => onNavigateToArtist(artistId, album.artistName, album.primaryGenreName)}
-                className="font-semibold text-gray-900 dark:text-white hover:text-brand-500 dark:hover:text-brand-400 transition-colors hover:underline"
+                className="font-semibold text-gray-900 dark:text-white hover:text-brand-500 dark:hover:text-brand-400 transition-colors hover:underline rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 px-1 -mx-1"
+                aria-label={`Buka halaman artis ${album.artistName}`}
               >
                 {album.artistName}
               </button>
@@ -283,88 +271,129 @@ export default function AlbumDetail({ album, onBack, onPlaySong, onNavigateToArt
             )}
             <span className="text-gray-400">·</span>
             <span className="text-gray-500 dark:text-gray-400">
-              {tracks.length > 0 ? `${tracks.length} songs` : `${album.trackCount ?? '?'} songs`}
-              {totalMinutes > 0 && ` · ~${totalMinutes} min`}
+              {tracks.length > 0 ? `${tracks.length} lagu` : `${album.trackCount ?? '?'} lagu`}
+              {totalMinutes > 0 && ` · ~${totalMinutes} menit`}
             </span>
           </div>
 
           <button
             onClick={handlePlayAll}
             disabled={loading || tracks.length === 0}
-            className="mt-1 flex items-center space-x-2 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 disabled:cursor-not-allowed text-white px-6 py-2.5 rounded-full font-semibold shadow-lg shadow-brand-500/30 transition-all hover:scale-105 active:scale-95 w-fit"
+            aria-label="Putar semua lagu dalam album ini"
+            className="mt-1 flex items-center space-x-2 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 disabled:cursor-not-allowed text-white px-6 py-2.5 rounded-full font-semibold shadow-lg shadow-brand-500/30 transition-all hover:scale-105 active:scale-95 w-fit focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-[#121212]"
           >
             <Play className="w-5 h-5 fill-white" />
-            <span>Play All</span>
+            <span>Putar Semua</span>
           </button>
         </motion.div>
       </div>
 
-      {/* ── Track list — part of the scrollable container above ───── */}
+      {/* ── Track list ───── */}
       <div className="px-8 mt-4">
         {/* Column header */}
-        <div className="grid grid-cols-[32px_1fr_80px] gap-4 px-4 py-3 border-b border-black/10 dark:border-white/10 text-xs font-semibold uppercase tracking-wider text-gray-500">
+        <div className="grid grid-cols-[32px_1fr_60px_36px] gap-4 px-4 py-3 border-b border-black/10 dark:border-white/10 text-xs font-semibold uppercase tracking-wider text-gray-500">
           <span className="text-center">#</span>
-          <span>Title</span>
-          <span className="flex items-center justify-end">
+          <span>Judul</span>
+          <span className="flex items-center justify-end" title="Durasi">
             <Clock className="w-3.5 h-3.5" />
           </span>
+          <span className="text-center"></span>
         </div>
 
         {/* States */}
         {loading && (
-          <div className="flex items-center justify-center py-20">
-            <Loader2 className="w-8 h-8 animate-spin text-brand-400" />
+          <div className="flex flex-col items-center justify-center py-20 space-y-3" role="status" aria-live="polite">
+            <Loader2 className="w-8 h-8 animate-spin text-brand-500" />
+            <span className="text-sm text-gray-500 dark:text-gray-400">Memuat daftar lagu album...</span>
           </div>
         )}
 
         {!loading && error && (
-          <div className="flex flex-col items-center justify-center py-20 text-red-500 space-y-2">
+          <div className="flex flex-col items-center justify-center py-20 text-red-500 space-y-3" role="alert" aria-live="assertive">
             <Music2 className="w-10 h-10 opacity-40" />
-            <p className="text-sm">{error}</p>
+            <p className="text-sm font-medium">{error}</p>
+            <button
+              onClick={fetchTracks}
+              className="mt-2 flex items-center space-x-2 px-4 py-2 bg-brand-500/10 hover:bg-brand-500/20 text-brand-500 rounded-full text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Coba Lagi</span>
+            </button>
           </div>
         )}
 
         {!loading && !error && tracks.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-20 text-gray-500 space-y-2">
+          <div className="flex flex-col items-center justify-center py-20 text-gray-500 space-y-2" role="status">
             <Music2 className="w-10 h-10 opacity-40" />
-            <p className="text-sm">No tracks found for this album.</p>
-            <p className="text-xs text-gray-400">Album ID: {album.collectionId}</p>
+            <p className="text-sm font-medium">Tidak ada lagu yang ditemukan untuk album ini.</p>
+            <p className="text-xs text-gray-400">ID Album: {album.collectionId}</p>
           </div>
         )}
 
         {!loading && !error && tracks.length > 0 && (
-          <div className="flex flex-col">
-            {tracks.map((track, idx) => (
-              <motion.div
-                key={track.trackId}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: idx * 0.02, duration: 0.2 }}
-                onClick={() => handlePlayTrack(track)}
-                className="group grid grid-cols-[32px_1fr_80px] gap-4 px-4 py-3.5 rounded-xl cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 transition-all duration-150 items-center"
-              >
-                {/* Track number → play icon on hover */}
-                <div className="text-center">
-                  <span className="text-sm text-gray-400 group-hover:hidden tabular-nums">
-                    {track.trackNumber ?? idx + 1}
-                  </span>
-                  <Play className="w-4 h-4 text-brand-400 fill-brand-400 hidden group-hover:block mx-auto" />
-                </div>
+          <div className="flex flex-col py-1">
+            {tracks.map((track, idx) => {
+              const currentDisc = track.discNumber ?? 1;
+              const prevDisc = idx > 0 ? (tracks[idx - 1].discNumber ?? 1) : null;
+              const showDiscHeader = hasMultipleDiscs && (idx === 0 || currentDisc !== prevDisc);
 
-                {/* Title + Artist */}
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-gray-900 dark:text-white truncate group-hover:text-brand-500 dark:group-hover:text-brand-400 transition-colors">
-                    {track.trackName}
-                  </p>
-                  <p className="text-xs text-gray-500 truncate mt-0.5">{track.artistName}</p>
-                </div>
+              return (
+                <div key={track.trackId}>
+                  {showDiscHeader && (
+                    <div className="px-4 pt-5 pb-2 text-xs font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500 border-b border-black/5 dark:border-white/5">
+                      Disc {currentDisc}
+                    </div>
+                  )}
+                  <motion.div
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: Math.min(idx, 20) * 0.02, duration: 0.2 }}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`Putar ${track.trackName} oleh ${track.artistName}`}
+                    onClick={() => handlePlayTrack(track)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        handlePlayTrack(track);
+                      }
+                    }}
+                    className="group grid grid-cols-[32px_1fr_60px_36px] gap-4 px-4 py-3.5 rounded-xl cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 transition-all duration-150 items-center"
+                  >
+                    {/* Track number → play icon on hover/focus */}
+                    <div className="text-center">
+                      <span className="text-sm text-gray-400 group-hover:hidden group-focus-visible:hidden tabular-nums">
+                        {track.trackNumber ?? idx + 1}
+                      </span>
+                      <Play className="w-4 h-4 text-brand-500 fill-brand-500 hidden group-hover:block group-focus-visible:block mx-auto" />
+                    </div>
 
-                {/* Duration */}
-                <span className="text-sm text-gray-400 text-right tabular-nums">
-                  {formatDuration(track.trackTimeMillis)}
-                </span>
-              </motion.div>
-            ))}
+                    {/* Title + Artist */}
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-gray-900 dark:text-white truncate group-hover:text-brand-500 dark:group-hover:text-brand-400 transition-colors">
+                        {track.trackName}
+                      </p>
+                      <p className="text-xs text-gray-500 truncate mt-0.5">{track.artistName}</p>
+                    </div>
+
+                    {/* Duration */}
+                    <span className="text-sm text-gray-400 text-right tabular-nums">
+                      {formatDuration(track.trackTimeMillis)}
+                    </span>
+
+                    {/* Action Menu */}
+                    <div className="flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+                      <SongActionMenu
+                        song={itunesTrackToSong(track)}
+                        onPlayNext={onPlayNext}
+                        onAddToQueue={onAddToQueue}
+                        onOpenAddToPlaylist={onOpenAddToPlaylist}
+                      />
+                    </div>
+                  </motion.div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

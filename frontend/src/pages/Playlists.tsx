@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ListMusic, Play, Loader2, Music2, RefreshCw } from 'lucide-react';
+import { ListMusic, Play, Loader2, Music2, RefreshCw, AlertCircle, RotateCcw } from 'lucide-react';
 import { supabase, DbPlaylist, DbPlaylistTrack } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { main } from '../../wailsjs/go/models';
@@ -8,24 +8,40 @@ import PlaylistDetail from './PlaylistDetail';
 
 interface PlaylistsProps {
   onPlaySong: (song: main.Song, queue: main.Song[], source: 'playlist' | 'search') => void;
+  onPlayNext?: (song: main.Song) => void;
+  onAddToQueue?: (song: main.Song) => void;
+  onOpenAddToPlaylist?: (song: main.Song) => void;
+  selectedPlaylistId?: string | null;
+  onClearSelectedPlaylist?: () => void;
 }
 
-export default function Playlists({ onPlaySong }: PlaylistsProps) {
-  const { user } = useAuth();
+export default function Playlists({
+  onPlaySong,
+  onPlayNext,
+  onAddToQueue,
+  onOpenAddToPlaylist,
+  selectedPlaylistId,
+  onClearSelectedPlaylist,
+}: PlaylistsProps) {
+  const { user, refreshPlaylists } = useAuth();
   const [playlists, setPlaylists] = useState<DbPlaylist[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [selectedPlaylist, setSelectedPlaylist] = useState<DbPlaylist | null>(null);
   const [playlistTracks, setPlaylistTracks] = useState<main.Song[]>([]);
   const [loadingTracks, setLoadingTracks] = useState(false);
+  const [trackError, setTrackError] = useState<string | null>(null);
 
   const fetchPlaylists = useCallback(async () => {
     if (!user) {
       setPlaylists([]);
       setLoading(false);
+      setError(null);
       return;
     }
 
     setLoading(true);
+    setError(null);
     try {
       // 1. Fetch user playlists
       const { data: plData, error: plErr } = await supabase
@@ -54,8 +70,9 @@ export default function Playlists({ onPlaySong }: PlaylistsProps) {
       }));
 
       setPlaylists(enriched);
-    } catch (err) {
+    } catch (err: any) {
       console.error('[Playlists] Error fetching playlists:', err);
+      setError(err?.message || 'Gagal memuat daftar playlist.');
     } finally {
       setLoading(false);
     }
@@ -68,15 +85,16 @@ export default function Playlists({ onPlaySong }: PlaylistsProps) {
   const handleSelectPlaylist = useCallback(async (playlist: DbPlaylist) => {
     setSelectedPlaylist(playlist);
     setLoadingTracks(true);
+    setTrackError(null);
 
     try {
-      const { data, error } = await supabase
+      const { data, error: trError } = await supabase
         .from('playlist_tracks')
         .select('*')
         .eq('playlist_id', playlist.id)
         .order('order_index', { ascending: true });
 
-      if (error) throw error;
+      if (trError) throw trError;
 
       const songs: main.Song[] = (data || []).map((t: DbPlaylistTrack) => {
         const s = new main.Song();
@@ -93,20 +111,47 @@ export default function Playlists({ onPlaySong }: PlaylistsProps) {
       });
 
       setPlaylistTracks(songs);
-    } catch (err) {
+    } catch (err: any) {
       console.error('[Playlists] Error fetching tracks:', err);
+      setTrackError(err?.message || 'Gagal memuat lagu di playlist.');
       setPlaylistTracks([]);
     } finally {
       setLoadingTracks(false);
     }
   }, []);
 
+  useEffect(() => {
+    if (selectedPlaylistId) {
+      const found = playlists.find(p => p.id === selectedPlaylistId);
+      if (found) {
+        handleSelectPlaylist(found);
+      } else {
+        supabase.from('playlists').select('*').eq('id', selectedPlaylistId).single().then(({ data }) => {
+          if (data) handleSelectPlaylist(data as DbPlaylist);
+        });
+      }
+    } else if (selectedPlaylistId === null) {
+      setSelectedPlaylist(null);
+      setPlaylistTracks([]);
+    }
+  }, [selectedPlaylistId, playlists, handleSelectPlaylist]);
+
   if (selectedPlaylist) {
     if (loadingTracks) {
       return (
-        <div className="w-full h-full flex flex-col items-center justify-center space-y-3 text-gray-500">
+        <div className="w-full h-full flex flex-col items-center justify-center space-y-4 text-gray-500">
           <Loader2 className="w-8 h-8 animate-spin text-brand-500" />
           <p className="text-sm font-medium">Memuat lagu di "{selectedPlaylist.name}"...</p>
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedPlaylist(null);
+              setLoadingTracks(false);
+            }}
+            className="px-4 py-1.5 rounded-full border border-black/10 dark:border-white/10 hover:bg-black/5 dark:hover:bg-white/10 text-xs font-semibold text-gray-700 dark:text-gray-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+          >
+            Batal
+          </button>
         </div>
       );
     }
@@ -123,7 +168,11 @@ export default function Playlists({ onPlaySong }: PlaylistsProps) {
           onBack={() => {
             setSelectedPlaylist(null);
             setPlaylistTracks([]);
+            if (onClearSelectedPlaylist) onClearSelectedPlaylist();
           }}
+          onPlayNext={onPlayNext}
+          onAddToQueue={onAddToQueue}
+          onOpenAddToPlaylist={onOpenAddToPlaylist}
         />
       </AnimatePresence>
     );
@@ -151,14 +200,34 @@ export default function Playlists({ onPlaySong }: PlaylistsProps) {
         </div>
 
         <button
+          type="button"
           onClick={fetchPlaylists}
           disabled={loading}
-          className="p-2.5 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors text-gray-500 dark:text-gray-400 hover:text-black dark:hover:text-white"
+          className="p-2.5 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors text-gray-500 dark:text-gray-400 hover:text-black dark:hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
           title="Segarkan Playlist"
+          aria-label="Segarkan daftar playlist"
         >
           <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
         </button>
       </div>
+
+      {/* Error alert */}
+      {error && (
+        <div className="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 flex items-center justify-between">
+          <div className="flex items-center space-x-2 text-sm">
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            <span>{error}</span>
+          </div>
+          <button
+            type="button"
+            onClick={fetchPlaylists}
+            className="flex items-center space-x-1 px-3 py-1 rounded bg-red-500 text-white text-xs font-semibold hover:bg-red-600 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span>Coba Lagi</span>
+          </button>
+        </div>
+      )}
 
       {/* Grid of Playlists */}
       {loading ? (
@@ -171,11 +240,11 @@ export default function Playlists({ onPlaySong }: PlaylistsProps) {
             </div>
           ))}
         </div>
-      ) : playlists.length === 0 ? (
+      ) : playlists.length === 0 && !error ? (
         <div className="flex flex-col items-center justify-center h-80 text-gray-500 space-y-3">
           <Music2 className="w-12 h-12 opacity-30" />
           <p className="text-base font-semibold">Belum Ada Playlist Tersimpan</p>
-          <p className="text-sm text-gray-400">
+          <p className="text-sm text-gray-400 max-w-sm text-center">
             Playlist yang Anda simpan di akun ini akan otomatis muncul di sini.
           </p>
         </div>
@@ -184,18 +253,27 @@ export default function Playlists({ onPlaySong }: PlaylistsProps) {
           {playlists.map((pl, idx) => (
             <motion.div
               key={pl.id}
+              role="button"
+              tabIndex={0}
+              aria-label={`Buka playlist ${pl.name}`}
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: idx * 0.04, duration: 0.3 }}
+              transition={{ delay: Math.min(idx, 8) * 0.03, duration: 0.25 }}
               onClick={() => handleSelectPlaylist(pl)}
-              className="group cursor-pointer flex flex-col space-y-3 focus:outline-none"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  handleSelectPlaylist(pl);
+                }
+              }}
+              className="group cursor-pointer flex flex-col space-y-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 rounded-2xl p-1"
             >
               {/* Cover with hover play button */}
               <div className="relative aspect-square rounded-2xl overflow-hidden shadow-lg border border-black/5 dark:border-white/10 bg-black/5 dark:bg-white/5 group-hover:shadow-2xl transition-all duration-300 group-hover:scale-[1.03]">
                 {pl.cover_url ? (
                   <img
                     src={pl.cover_url}
-                    alt={pl.name}
+                    alt=""
                     className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                   />
                 ) : (
@@ -213,12 +291,12 @@ export default function Playlists({ onPlaySong }: PlaylistsProps) {
               </div>
 
               {/* Info */}
-              <div className="px-0.5">
+              <div className="px-0.5 min-w-0">
                 <h3 className="text-sm font-semibold text-gray-900 dark:text-white truncate group-hover:text-brand-500 dark:group-hover:text-brand-400 transition-colors">
                   {pl.name}
                 </h3>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                  {pl.track_count ?? 0} {pl.track_count === 1 ? 'song' : 'songs'}
+                  {pl.track_count ?? 0} {pl.track_count === 1 ? 'lagu' : 'lagu'}
                 </p>
               </div>
             </motion.div>
@@ -228,4 +306,3 @@ export default function Playlists({ onPlaySong }: PlaylistsProps) {
     </motion.div>
   );
 }
-

@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
 import { Session, User } from '@supabase/supabase-js';
-import { supabase, UserProfile, FavoriteTrack } from '../lib/supabase';
+import { supabase, UserProfile, FavoriteTrack, DbPlaylist } from '../lib/supabase';
 import { EventsOn, EventsOff } from '../../wailsjs/runtime/runtime';
 
 // ── Error message translator ────────────────────────────────────
@@ -41,6 +41,7 @@ interface AuthState {
   session:    Session | null;
   profile:    UserProfile | null;
   favorites:  FavoriteTrack[];
+  playlists:  DbPlaylist[];
   isLoading:  boolean;
   isAdmin:    boolean;
 }
@@ -54,6 +55,7 @@ interface AuthActions {
   removeFavorite:   (itunesTrackId: string) => Promise<void>;
   isFavorited:      (itunesTrackId: string) => boolean;
   refreshFavorites: () => Promise<void>;
+  refreshPlaylists: () => Promise<void>;
   refreshProfile:   () => Promise<void>;
 }
 
@@ -68,6 +70,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session,   setSession]   = useState<Session | null>(null);
   const [profile,   setProfile]   = useState<UserProfile | null>(null);
   const [favorites, setFavorites] = useState<FavoriteTrack[]>([]);
+  const [playlists, setPlaylists] = useState<DbPlaylist[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // ── Fetch profile from 'profiles' table ──
@@ -109,6 +112,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  // ── Fetch user playlists ──
+  const refreshPlaylists = useCallback(async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const currentUserId = session?.user?.id;
+      if (!currentUserId) {
+        setPlaylists([]);
+        return;
+      }
+      const { data: plData, error: plErr } = await supabase
+        .from('playlists')
+        .select('*')
+        .eq('user_id', currentUserId)
+        .order('created_at', { ascending: false });
+
+      if (plErr) {
+        console.warn('[Auth] Could not fetch playlists:', plErr.message);
+        return;
+      }
+
+      const { data: trackData, error: trErr } = await supabase
+        .from('playlist_tracks')
+        .select('playlist_id');
+
+      const countMap: Record<string, number> = {};
+      if (!trErr && trackData) {
+        for (const row of trackData) {
+          countMap[row.playlist_id] = (countMap[row.playlist_id] || 0) + 1;
+        }
+      }
+
+      const enriched: DbPlaylist[] = (plData || []).map(p => ({
+        ...p,
+        track_count: countMap[p.id] || 0,
+      }));
+
+      setPlaylists(enriched);
+    } catch (err) {
+      console.error('[Auth] Exception fetching playlists:', err);
+    }
+  }, []);
+
   // ── Initialize session on mount ──
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -117,6 +162,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (session?.user) {
         fetchProfile(session.user.id);
         refreshFavorites();
+        refreshPlaylists();
       }
       setIsLoading(false);
     });
@@ -127,9 +173,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (session?.user) {
         fetchProfile(session.user.id);
         refreshFavorites();
+        refreshPlaylists();
       } else {
         setProfile(null);
         setFavorites([]);
+        setPlaylists([]);
       }
     });
 
@@ -255,6 +303,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // ── Sign Out ──
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
+    setUser(null);
+    setSession(null);
+    setProfile(null);
+    setFavorites([]);
+    setPlaylists([]);
   }, []);
 
   // ── Add Favorite ──
@@ -284,10 +337,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [favorites]);
 
   const value: AuthContextType = {
-    user, session, profile, favorites, isLoading,
+    user, session, profile, favorites, playlists, isLoading,
     isAdmin: profile?.role === 'admin',
     signIn, signUp, signInWithGoogle, signOut,
-    addFavorite, removeFavorite, isFavorited, refreshFavorites,
+    addFavorite, removeFavorite, isFavorited, refreshFavorites, refreshPlaylists,
     refreshProfile: useCallback(async () => {
       if (session?.user?.id) await fetchProfile(session.user.id);
     }, [session, fetchProfile]),

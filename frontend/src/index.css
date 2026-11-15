@@ -40,6 +40,16 @@
     transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
   }
 
+  /* ── REDUCED MOTION GUARD (WCAG 2.2 / Gap 07-F04) ── */
+  @media (prefers-reduced-motion: reduce) {
+    *, ::before, ::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
   /* Scrollbar - LIGHT MODE DEFAULT */
   ::-webkit-scrollbar { width: 4px; }
   ::-webkit-scrollbar-track { background: transparent; }
@@ -246,4 +256,18 @@
   );
   background-size: 200% 100%;
   animation: shimmer 1.8s infinite;
+}
+
+/* ── 4. ACCESSIBILITY & FOCUS TOKENS ── */
+.select-text {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.focus-ring {
+  outline: none;
+}
+.focus-ring:focus-visible {
+  outline: 2px solid var(--app-accent);
+  outline-offset: 2px;
 }

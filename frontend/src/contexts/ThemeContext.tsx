@@ -1,59 +1,87 @@
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
 
-type Theme = 'light' | 'dark';
+export type Theme = 'light' | 'dark';
+export type ThemeMode = 'system' | 'light' | 'dark';
 
 interface ThemeContextType {
   theme: Theme;
+  themeMode: ThemeMode;
+  setThemeMode: (mode: ThemeMode) => void;
   toggleTheme: () => void;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
+function getSystemTheme(): Theme {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+    return 'dark';
+  }
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setTheme] = useState<Theme>(() => {
-    const savedTheme = localStorage.getItem('theme');
-    if (savedTheme === 'light' || savedTheme === 'dark') {
-      return savedTheme;
-    }
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  const [themeMode, setThemeModeState] = useState<ThemeMode>(() => {
+    try {
+      const savedMode = localStorage.getItem('theme_mode');
+      if (savedMode === 'system' || savedMode === 'light' || savedMode === 'dark') {
+        return savedMode;
+      }
+      const legacyTheme = localStorage.getItem('theme');
+      if (legacyTheme === 'light' || legacyTheme === 'dark') {
+        return legacyTheme;
+      }
+    } catch (_) {}
+    return 'system';
   });
 
+  const [systemTheme, setSystemTheme] = useState<Theme>(getSystemTheme);
+
+  // Listen to OS theme changes
   useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleChange = (e: MediaQueryListEvent) => {
+      setSystemTheme(e.matches ? 'dark' : 'light');
+    };
+
+    if (typeof mediaQuery.addEventListener === 'function') {
+      mediaQuery.addEventListener('change', handleChange);
+      return () => mediaQuery.removeEventListener('change', handleChange);
+    } else if (typeof (mediaQuery as any).addListener === 'function') {
+      (mediaQuery as any).addListener(handleChange);
+      return () => (mediaQuery as any).removeListener(handleChange);
+    }
+  }, []);
+
+  const resolvedTheme: Theme = themeMode === 'system' ? systemTheme : themeMode;
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
     const root = window.document.documentElement;
-    if (theme === 'dark') {
+    if (resolvedTheme === 'dark') {
       root.classList.add('dark');
     } else {
       root.classList.remove('dark');
     }
-    localStorage.setItem('theme', theme);
-  }, [theme]);
+    try {
+      localStorage.setItem('theme', resolvedTheme);
+      localStorage.setItem('theme_mode', themeMode);
+    } catch (_) {}
+  }, [resolvedTheme, themeMode]);
 
-  // Listen to OS theme changes if user hasn't explicitly set a preference
-  useEffect(() => {
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    const handleChange = (e: MediaQueryListEvent) => {
-      // Only auto-switch if the user hasn't forced a theme in localStorage
-      // We know they forced it if localStorage has a value.
-      // Wait, if they toggled it, it's saved. If they want to reset to OS, we'd need a "system" option.
-      // For now, if the OS changes, we just update it IF we want to be strictly responsive.
-      // Given the prompt, let's just update it if there's no saved theme (which is handled on init).
-      // But let's be nice: if they change OS theme, we'll follow it ONLY IF they haven't manually overridden.
-      // Actually, a simple approach is just to always follow OS if no local storage.
-      if (!localStorage.getItem('theme')) {
-        setTheme(e.matches ? 'dark' : 'light');
-      }
-    };
-    
-    mediaQuery.addEventListener('change', handleChange);
-    return () => mediaQuery.removeEventListener('change', handleChange);
+  const setThemeMode = useCallback((mode: ThemeMode) => {
+    setThemeModeState(mode);
   }, []);
 
-  const toggleTheme = () => {
-    setTheme(prev => (prev === 'dark' ? 'light' : 'dark'));
-  };
+  const toggleTheme = useCallback(() => {
+    setThemeModeState(prev => {
+      const currentResolved = prev === 'system' ? systemTheme : prev;
+      return currentResolved === 'dark' ? 'light' : 'dark';
+    });
+  }, [systemTheme]);
 
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme }}>
+    <ThemeContext.Provider value={{ theme: resolvedTheme, themeMode, setThemeMode, toggleTheme }}>
       {children}
     </ThemeContext.Provider>
   );
@@ -66,3 +94,4 @@ export function useTheme() {
   }
   return context;
 }
+

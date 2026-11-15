@@ -75,7 +75,7 @@ export default function UserBadge({ setActiveTab }: UserBadgeProps) {
               {/* Actions */}
               <button
                 onClick={() => { setActiveTab('profile'); setShowMenu(false); }}
-                className="w-full flex items-center space-x-2.5 px-3 py-2.5 text-[13px] text-[var(--app-text-secondary)] hover:text-gray-900 hover:bg-black/5 dark:hover:text-white dark:hover:bg-white/5 transition-colors"
+                className="w-full flex items-center space-x-2.5 px-3 py-2.5 text-[13px] text-[var(--app-text-secondary)] hover:text-gray-900 hover:bg-black/5 dark:hover:text-white dark:hover:bg-white/5 transition-colors focus-visible:outline-none focus-visible:bg-black/10 dark:focus-visible:bg-white/10"
               >
                 <UserIcon className="w-4 h-4" />
                 <span>Profile</span>
@@ -83,7 +83,7 @@ export default function UserBadge({ setActiveTab }: UserBadgeProps) {
 
               <button
                 onClick={() => { setActiveTab('settings'); setShowMenu(false); }}
-                className="w-full flex items-center space-x-2.5 px-3 py-2.5 text-[13px] text-[var(--app-text-secondary)] hover:text-gray-900 hover:bg-black/5 dark:hover:text-white dark:hover:bg-white/5 transition-colors"
+                className="w-full flex items-center space-x-2.5 px-3 py-2.5 text-[13px] text-[var(--app-text-secondary)] hover:text-gray-900 hover:bg-black/5 dark:hover:text-white dark:hover:bg-white/5 transition-colors focus-visible:outline-none focus-visible:bg-black/10 dark:focus-visible:bg-white/10"
               >
                 <Settings className="w-4 h-4" />
                 <span>Settings</span>
@@ -91,7 +91,7 @@ export default function UserBadge({ setActiveTab }: UserBadgeProps) {
 
               <button
                 onClick={() => { setActiveTab('library'); setShowMenu(false); }}
-                className="w-full flex items-center space-x-2.5 px-3 py-2.5 text-[13px] text-[var(--app-text-secondary)] hover:text-gray-900 hover:bg-black/5 dark:hover:text-white dark:hover:bg-white/5 transition-colors border-b border-gray-200 dark:border-[#2c2c2e]"
+                className="w-full flex items-center space-x-2.5 px-3 py-2.5 text-[13px] text-[var(--app-text-secondary)] hover:text-gray-900 hover:bg-black/5 dark:hover:text-white dark:hover:bg-white/5 transition-colors border-b border-gray-200 dark:border-[#2c2c2e] focus-visible:outline-none focus-visible:bg-black/10 dark:focus-visible:bg-white/10"
               >
                 <Star className="w-4 h-4" />
                 <span>Favorit Saya</span>
@@ -99,7 +99,7 @@ export default function UserBadge({ setActiveTab }: UserBadgeProps) {
 
               <button
                 onClick={() => { signOut(); setShowMenu(false); }}
-                className="w-full flex items-center space-x-2.5 px-3 py-2.5 text-[13px] text-[#FA243C] hover:text-red-400 hover:bg-red-500/5 transition-colors"
+                className="w-full flex items-center space-x-2.5 px-3 py-2.5 text-[13px] text-[#FA243C] hover:text-red-400 hover:bg-red-500/5 transition-colors focus-visible:outline-none focus-visible:bg-red-500/10"
               >
                 <LogOut className="w-4 h-4" />
                 <span>Keluar</span>
@@ -112,7 +112,10 @@ export default function UserBadge({ setActiveTab }: UserBadgeProps) {
       {/* Trigger button */}
       <button
         onClick={() => setShowMenu(v => !v)}
-        className="w-full flex items-center space-x-2.5 px-2 py-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition-all duration-200 group"
+        aria-haspopup="menu"
+        aria-expanded={showMenu}
+        aria-label={`Menu akun ${displayName}`}
+        className="w-full flex items-center space-x-2.5 px-2 py-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition-all duration-200 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
       >
         {/* Avatar */}
         <div className="w-8 h-8 rounded-full bg-brand-500 flex items-center justify-center flex-shrink-0 text-[11px] font-bold text-white shadow-md shadow-brand-500/20 overflow-hidden">

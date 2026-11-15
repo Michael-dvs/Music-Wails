@@ -6,7 +6,7 @@ import { motion } from 'framer-motion';
 
 export default function Profile() {
   const { user, profile, refreshProfile, signOut } = useAuth();
-  
+
   // Tab State
   const [activeTab, setActiveTab] = useState<'general' | 'security'>('general');
 
@@ -15,14 +15,14 @@ export default function Profile() {
   const [avatarUrl, setAvatarUrl] = useState(profile?.avatar_url || '');
   const [isUploading, setIsUploading] = useState(false);
   const [isSavingGeneral, setIsSavingGeneral] = useState(false);
-  const [generalMsg, setGeneralMsg] = useState<{type: 'success' | 'error', text: string} | null>(null);
+  const [generalMsg, setGeneralMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Security State
   const [email, setEmail] = useState(user?.email || '');
   const [password, setPassword] = useState('');
   const [isSavingSecurity, setIsSavingSecurity] = useState(false);
-  const [securityMsg, setSecurityMsg] = useState<{type: 'success' | 'error', text: string} | null>(null);
+  const [securityMsg, setSecurityMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
     if (profile) {
@@ -56,7 +56,7 @@ export default function Profile() {
         .from('profiles')
         .upload(filePath, compressedBlob, {
           cacheControl: '3600',
-          upsert: true
+          upsert: true,
         });
 
       if (uploadError) throw uploadError;
@@ -103,7 +103,7 @@ export default function Profile() {
           }, 'image/jpeg', 0.8);
         };
       };
-      reader.onerror = error => reject(error);
+      reader.onerror = (error) => reject(error);
     });
   };
 
@@ -152,13 +152,19 @@ export default function Profile() {
       const { error } = await supabase.auth.updateUser(updates);
       if (error) throw error;
 
-      setSecurityMsg({ type: 'success', text: 'Kredensial berhasil diperbarui. Jika mengubah email, periksa kotak masuk Anda untuk verifikasi.' });
+      setSecurityMsg({
+        type: 'success',
+        text: 'Kredensial berhasil diperbarui. Jika mengubah email, periksa kotak masuk Anda untuk verifikasi.',
+      });
       setPassword('');
     } catch (err: any) {
       if (err.message.includes('Session expired') || err.message.includes('refresh token')) {
-         setSecurityMsg({ type: 'error', text: 'Sesi Anda telah kedaluwarsa. Harap logout dan login kembali untuk mengubah keamanan akun.' });
+        setSecurityMsg({
+          type: 'error',
+          text: 'Sesi Anda telah kedaluwarsa. Harap logout dan login kembali untuk mengubah keamanan akun.',
+        });
       } else {
-         setSecurityMsg({ type: 'error', text: err.message });
+        setSecurityMsg({ type: 'error', text: err.message });
       }
     } finally {
       setIsSavingSecurity(false);
@@ -167,31 +173,38 @@ export default function Profile() {
 
   return (
     <div className="w-full h-full flex flex-col text-gray-900 dark:text-white bg-white dark:bg-[#121212] overflow-hidden">
-      
       {/* Header Profile Summary */}
       <div className="w-full bg-gray-50 dark:bg-[#1a1a1a] border-b border-gray-200 dark:border-white/10 p-8 flex-shrink-0">
         <div className="max-w-3xl mx-auto flex items-center space-x-6">
           <div className="relative group">
             <div className="w-24 h-24 rounded-full bg-brand-500/20 overflow-hidden flex items-center justify-center border-4 border-white dark:border-[#1c1c1e] shadow-lg">
               {avatarUrl ? (
-                <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                <img src={avatarUrl} alt="Foto Profil" className="w-full h-full object-cover" />
               ) : (
                 <User className="w-10 h-10 text-brand-500" />
               )}
             </div>
             {/* Upload Overlay */}
-            <button 
+            <button
+              type="button"
               onClick={() => fileInputRef.current?.click()}
               disabled={isUploading}
-              className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-full flex items-center justify-center"
+              aria-label="Unggah foto profil baru"
+              title="Unggah foto profil"
+              className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity rounded-full flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
             >
-              {isUploading ? <Loader2 className="w-6 h-6 text-white animate-spin" /> : <Upload className="w-6 h-6 text-white" />}
+              {isUploading ? (
+                <Loader2 className="w-6 h-6 text-white animate-spin" />
+              ) : (
+                <Upload className="w-6 h-6 text-white" />
+              )}
             </button>
-            <input 
-              type="file" 
-              ref={fileInputRef} 
-              className="hidden" 
+            <input
+              type="file"
+              ref={fileInputRef}
+              className="hidden"
               accept="image/*"
+              aria-label="Pilih berkas foto profil"
               onChange={handleFileChange}
             />
           </div>
@@ -201,9 +214,10 @@ export default function Profile() {
             <p className="text-gray-500 dark:text-gray-400 mt-1">{user?.email}</p>
           </div>
 
-          <button 
+          <button
             onClick={signOut}
-            className="px-4 py-2 bg-red-500/10 text-red-500 hover:bg-red-500/20 rounded-full font-medium flex items-center space-x-2 transition-colors"
+            aria-label="Keluar dari akun"
+            className="px-4 py-2 bg-red-500/10 text-red-500 hover:bg-red-500/20 rounded-full font-medium flex items-center space-x-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
           >
             <LogOut className="w-4 h-4" />
             <span>Logout</span>
@@ -214,21 +228,38 @@ export default function Profile() {
       {/* Main Content Area */}
       <div className="flex-1 overflow-y-auto p-8">
         <div className="max-w-3xl mx-auto space-y-8 pb-24">
-          
           {/* Tabs Navigation */}
-          <div className="flex space-x-6 border-b border-black/10 dark:border-white/10 mb-8">
+          <div
+            role="tablist"
+            aria-label="Pengaturan Profil"
+            className="flex space-x-6 border-b border-black/10 dark:border-white/10 mb-8"
+          >
             <button
+              id="tab-general"
+              role="tab"
+              type="button"
+              aria-selected={activeTab === 'general'}
+              aria-controls="panel-general"
               onClick={() => setActiveTab('general')}
-              className={`pb-3 text-sm font-medium transition-all ${
-                activeTab === 'general' ? 'border-b-2 border-brand-500 text-brand-500' : 'text-gray-500 hover:text-black dark:hover:text-white'
+              className={`pb-3 text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 rounded-t ${
+                activeTab === 'general'
+                  ? 'border-b-2 border-brand-500 text-brand-500'
+                  : 'text-gray-500 hover:text-black dark:hover:text-white'
               }`}
             >
               Profil Umum
             </button>
             <button
+              id="tab-security"
+              role="tab"
+              type="button"
+              aria-selected={activeTab === 'security'}
+              aria-controls="panel-security"
               onClick={() => setActiveTab('security')}
-              className={`pb-3 text-sm font-medium transition-all ${
-                activeTab === 'security' ? 'border-b-2 border-brand-500 text-brand-500' : 'text-gray-500 hover:text-black dark:hover:text-white'
+              className={`pb-3 text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 rounded-t ${
+                activeTab === 'security'
+                  ? 'border-b-2 border-brand-500 text-brand-500'
+                  : 'text-gray-500 hover:text-black dark:hover:text-white'
               }`}
             >
               Keamanan Akun
@@ -237,9 +268,13 @@ export default function Profile() {
 
           {/* Form General */}
           {activeTab === 'general' && (
-            <motion.form 
-              initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
-              onSubmit={saveGeneral} 
+            <motion.form
+              id="panel-general"
+              role="tabpanel"
+              aria-labelledby="tab-general"
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              onSubmit={saveGeneral}
               className="bg-gray-100 dark:bg-white/5 border border-black/5 dark:border-white/10 rounded-2xl p-6 shadow-sm space-y-6"
             >
               <h2 className="text-lg font-semibold flex items-center space-x-2">
@@ -249,26 +284,42 @@ export default function Profile() {
 
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Username</label>
+                  <label
+                    htmlFor="profile-username"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+                  >
+                    Username
+                  </label>
                   <input
+                    id="profile-username"
                     type="text"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    className="w-full bg-white dark:bg-[#1c1c1e] border border-gray-300 dark:border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    className="w-full bg-white dark:bg-[#1c1c1e] border border-gray-300 dark:border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-brand-500 text-gray-900 dark:text-white"
                   />
                 </div>
               </div>
 
               {generalMsg && (
-                <div className={`p-4 rounded-xl text-sm font-medium ${
-                  generalMsg.type === 'success' ? 'bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20' : 'bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20'
-                }`}>
+                <div
+                  role={generalMsg.type === 'error' ? 'alert' : 'status'}
+                  aria-live="polite"
+                  className={`p-4 rounded-xl text-sm font-medium ${
+                    generalMsg.type === 'success'
+                      ? 'bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20'
+                      : 'bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20'
+                  }`}
+                >
                   {generalMsg.text}
                 </div>
               )}
 
               <div className="flex justify-end">
-                <button type="submit" disabled={isSavingGeneral} className="flex items-center space-x-2 bg-brand-500 hover:bg-brand-600 text-white px-6 py-2.5 rounded-full font-medium transition-all disabled:opacity-50">
+                <button
+                  type="submit"
+                  disabled={isSavingGeneral}
+                  className="flex items-center space-x-2 bg-brand-500 hover:bg-brand-600 text-white px-6 py-2.5 rounded-full font-medium transition-all disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-[#121212]"
+                >
                   {isSavingGeneral ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                   <span>Simpan Perubahan</span>
                 </button>
@@ -278,9 +329,13 @@ export default function Profile() {
 
           {/* Form Security */}
           {activeTab === 'security' && (
-            <motion.form 
-              initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }}
-              onSubmit={saveSecurity} 
+            <motion.form
+              id="panel-security"
+              role="tabpanel"
+              aria-labelledby="tab-security"
+              initial={{ opacity: 0, x: 10 }}
+              animate={{ opacity: 1, x: 0 }}
+              onSubmit={saveSecurity}
               className="bg-gray-100 dark:bg-white/5 border border-black/5 dark:border-white/10 rounded-2xl p-6 shadow-sm space-y-6"
             >
               <h2 className="text-lg font-semibold flex items-center space-x-2">
@@ -290,50 +345,71 @@ export default function Profile() {
 
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Email Baru</label>
+                  <label
+                    htmlFor="profile-email"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+                  >
+                    Email Baru
+                  </label>
                   <div className="relative">
-                    <Mail className="w-5 h-5 absolute left-3 top-3.5 text-gray-400" />
+                    <Mail className="w-5 h-5 absolute left-3 top-3.5 text-gray-400 pointer-events-none" />
                     <input
+                      id="profile-email"
                       type="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="w-full bg-white dark:bg-[#1c1c1e] border border-gray-300 dark:border-white/10 rounded-xl pl-10 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                      className="w-full bg-white dark:bg-[#1c1c1e] border border-gray-300 dark:border-white/10 rounded-xl pl-10 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-brand-500 text-gray-900 dark:text-white"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Password Baru (Kosongkan jika tidak ingin mengubah)</label>
+                  <label
+                    htmlFor="profile-password"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+                  >
+                    Password Baru (Kosongkan jika tidak ingin mengubah)
+                  </label>
                   <div className="relative">
-                    <Lock className="w-5 h-5 absolute left-3 top-3.5 text-gray-400" />
+                    <Lock className="w-5 h-5 absolute left-3 top-3.5 text-gray-400 pointer-events-none" />
                     <input
+                      id="profile-password"
                       type="password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="••••••••"
-                      className="w-full bg-white dark:bg-[#1c1c1e] border border-gray-300 dark:border-white/10 rounded-xl pl-10 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                      className="w-full bg-white dark:bg-[#1c1c1e] border border-gray-300 dark:border-white/10 rounded-xl pl-10 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-brand-500 text-gray-900 dark:text-white"
                     />
                   </div>
                 </div>
               </div>
 
               {securityMsg && (
-                <div className={`p-4 rounded-xl text-sm font-medium ${
-                  securityMsg.type === 'success' ? 'bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20' : 'bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20'
-                }`}>
+                <div
+                  role={securityMsg.type === 'error' ? 'alert' : 'status'}
+                  aria-live="polite"
+                  className={`p-4 rounded-xl text-sm font-medium ${
+                    securityMsg.type === 'success'
+                      ? 'bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20'
+                      : 'bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20'
+                  }`}
+                >
                   {securityMsg.text}
                 </div>
               )}
 
               <div className="flex justify-end">
-                <button type="submit" disabled={isSavingSecurity} className="flex items-center space-x-2 bg-brand-500 hover:bg-brand-600 text-white px-6 py-2.5 rounded-full font-medium transition-all disabled:opacity-50">
+                <button
+                  type="submit"
+                  disabled={isSavingSecurity}
+                  className="flex items-center space-x-2 bg-brand-500 hover:bg-brand-600 text-white px-6 py-2.5 rounded-full font-medium transition-all disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-[#121212]"
+                >
                   {isSavingSecurity ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                   <span>Update Kredensial</span>
                 </button>
               </div>
             </motion.form>
           )}
-
         </div>
       </div>
     </div>
